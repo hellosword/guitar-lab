@@ -1,12 +1,47 @@
 /**
  * 音名选择器
- * 两区选择器：字母音名（C D E F G A B）+ 升降号（♮ # b）
- * TODO: 实现两区选择器交互
+ * MVP 快速答题模式：一键提交常用 12 个升号音名。
  */
-export default function NoteSelector() {
+import type { SharpNoteName } from '../../types/theory';
+
+interface NoteSelectorProps {
+  disabled?: boolean;
+  onSubmit: (noteName: SharpNoteName) => void;
+}
+
+const NATURAL_NOTES: SharpNoteName[] = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
+const SHARP_NOTES: SharpNoteName[] = ['C#', 'D#', 'F#', 'G#', 'A#'];
+
+export default function NoteSelector({ disabled = false, onSubmit }: NoteSelectorProps) {
   return (
-    <div className="p-4">
-      <p className="text-gray-400">音名选择器占位</p>
+    <div className="space-y-3">
+      <div className="grid grid-cols-7 gap-2">
+        {NATURAL_NOTES.map((noteName) => (
+          <button
+            key={noteName}
+            type="button"
+            disabled={disabled}
+            onClick={() => onSubmit(noteName)}
+            className="h-12 rounded-md border border-white/15 bg-white/8 text-sm font-semibold text-slate-100 transition hover:border-guitar-accent hover:bg-guitar-accent/85 disabled:cursor-not-allowed disabled:opacity-45"
+          >
+            {noteName}
+          </button>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-5 gap-2">
+        {SHARP_NOTES.map((noteName) => (
+          <button
+            key={noteName}
+            type="button"
+            disabled={disabled}
+            onClick={() => onSubmit(noteName)}
+            className="h-11 rounded-md border border-cyan-300/20 bg-cyan-400/10 text-sm font-semibold text-cyan-100 transition hover:border-cyan-200 hover:bg-cyan-400/25 disabled:cursor-not-allowed disabled:opacity-45"
+          >
+            {noteName}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

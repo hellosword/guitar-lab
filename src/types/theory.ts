@@ -13,14 +13,20 @@ export interface FretPosition {
   fret: number;
 }
 
+/** MVP 阶段统一使用升号记法，避免等音干扰 */
+export type SharpNoteName = 'C' | 'C#' | 'D' | 'D#' | 'E' | 'F' | 'F#' | 'G' | 'G#' | 'A' | 'A#' | 'B';
+
 /** 音名 */
-export type NoteName = 'C' | 'C#' | 'Db' | 'D' | 'D#' | 'Eb' | 'E' | 'F' | 'F#' | 'Gb' | 'G' | 'G#' | 'Ab' | 'A' | 'A#' | 'Bb' | 'B';
+export type NoteName = SharpNoteName | 'Db' | 'Eb' | 'Gb' | 'Ab' | 'Bb';
 
 /** 唱名（首调唱名法） */
 export type Solfeggio = 'Do' | 'Re' | 'Mi' | 'Fa' | 'Sol' | 'La' | 'Si';
 
+/** MVP 支持的调性 */
+export type PracticeKey = 'C major' | 'G major';
+
 /** 调式 */
-export type Key = string;
+export type Key = PracticeKey | string;
 
 /** 音程类型 */
 export type IntervalType = string;

@@ -8,6 +8,35 @@
 
 ## 高优先级（建议本周内）
 
+### 开发：随时可打开的指板记忆界面
+- **来源**：本次对话（2026-05-01），用户体验 MVP 后提出
+- **内容**：新增一个非答题模式的指板记忆/参考界面，方便任何时候自由查看和点击练习
+  - 展示一个可点击发音的 SVG 指板图
+  - 支持切换标记模式：音名标记 / 选定大调下的首调唱名标记
+  - 支持选择大调，首版优先 C 大调与 G 大调
+  - 在指板旁展示两排映射关系：音名一排、当前大调唱名一排
+  - 指板任意位置点击时播放近似吉他拨弦音，并可高亮对应音名/唱名映射
+- **预期产出**：一个可从主界面进入的“指板记忆”视图
+
+### 开发：最小练习闭环原型
+- **来源**：`docs/product/mvp-learning-loop-review.md`、`docs/tech/architecture-review-2026-05-01.md`
+- **内容**：实现第一版可运行练习闭环，聚焦 G/C 大调 0-5 品的“位置/六线谱 -> 音名/唱名”自动化训练
+  - 乐理基础函数：标准调弦位置到音名、C/G 大调唱名、0-5 品位置池
+  - 核心组件：SVG 指板图、音名选择器、唱名选择器、单音六线谱展示
+  - 游戏循环：出题、作答、即时反馈、下一题、练习总结
+  - 练习记录：正确率、反应时间、错题/慢题、F# 相关表现
+  - 架构策略：先用轻量题型工厂和 TypeScript 配置，不急于完整 PlayMode/Generator/Validator 注册表
+- **预期产出**：可运行的 MVP 原型
+
+### 产品：指板音名记忆玩法定义文档
+- **来源**：本次对话（2026-04-26），`docs/product/guitar-fretboard-game-design.md` 第 10 节后续待办
+- **内容**：在三维参数体系（Key → PlayMode → Range）框架下，定义指板音名记忆（P ↔ N）玩法的完整规则
+  - P→N（位置→音名）：题目展示、音名选择器交互、答案校验
+  - N→P（音名→位置）：全范围多点点击、弦组限定变体、部分得分计分规则（全对5分/部分2分/错0分）
+  - Mixed 混合模式：P→N 与 N→P 交替出题
+  - 与调性过滤的集成：G大调0-4品等具体配置示例
+- **预期产出**：`docs/product/playmode-note-memory.md`
+
 ### 交互设计：核心流程图
 - **来源**：`docs/methods/ai-interaction-design/ai-era-interaction-design-methods.md` Day 3 建议
 - **内容**：用 AI 生成 Guitar Lab 的核心交互流程图（Mermaid 格式）
@@ -19,6 +48,15 @@
 ---
 
 ## 中优先级（建议本月内）
+
+### 测试：浏览器级 Agent 自循环验证
+- **来源**：`docs/inbox.md` 2026-05-01
+- **内容**：在当前 `npm run test:smoke` 的基础上，补充真实浏览器级验证
+  - 打开本地预览页面
+  - 截图确认页面非空、指板与选择器可见
+  - 点击完成 1-2 道题，确认反馈面板出现
+  - 检查桌面和移动宽度下是否有明显布局重叠
+- **预期产出**：Playwright 或 Codex 浏览器工具驱动的冒烟测试脚本
 
 ### 交互设计：用户旅程图
 - **来源**：`docs/methods/ai-interaction-design/ai-era-interaction-design-methods.md` Day 1-2 建议
@@ -86,3 +124,9 @@
 | 2026-04-25 | 乐理框架与玩法设计 | `docs/product/guitar-fretboard-game-design.md` |
 | 2026-04-25 | AI 交互设计方法调研 | `docs/methods/ai-interaction-design/` |
 | 2026-04-25 | 项目骨架搭建 | 项目根目录（Vite + React + TS + Tailwind） |
+| 2026-05-01 | 个人学习目标校准 | `docs/product/learning-goal-calibration.md` |
+| 2026-05-01 | 最小练习闭环规格 | `docs/product/mvp-learning-loop-review.md` |
+| 2026-05-01 | 核心闭环优先产品设计方法 | `docs/methods/core-loop-first-product-design.md` |
+| 2026-05-01 | 架构合理性评审 | `docs/tech/architecture-review-2026-05-01.md` |
+| 2026-05-01 | 静态产物冒烟测试脚本 | `scripts/static-preview.mjs`、`scripts/smoke-dist.mjs` |
+| 2026-05-01 | Playwright 浏览器测试安装与基础用例 | `playwright.config.ts`、`tests/e2e/mvp-practice.spec.ts` |
