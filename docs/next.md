@@ -8,16 +8,6 @@
 
 ## 高优先级（建议本周内）
 
-### 开发：随时可打开的指板记忆界面
-- **来源**：本次对话（2026-05-01），用户体验 MVP 后提出
-- **内容**：新增一个非答题模式的指板记忆/参考界面，方便任何时候自由查看和点击练习
-  - 展示一个可点击发音的 SVG 指板图
-  - 支持切换标记模式：音名标记 / 选定大调下的首调唱名标记
-  - 支持选择大调，首版优先 C 大调与 G 大调
-  - 在指板旁展示两排映射关系：音名一排、当前大调唱名一排
-  - 指板任意位置点击时播放近似吉他拨弦音，并可高亮对应音名/唱名映射
-- **预期产出**：一个可从主界面进入的“指板记忆”视图
-
 ### 开发：最小练习闭环原型
 - **来源**：`docs/product/mvp-learning-loop-review.md`、`docs/tech/architecture-review-2026-05-01.md`
 - **内容**：实现第一版可运行练习闭环，聚焦 G/C 大调 0-5 品的“位置/六线谱 -> 音名/唱名”自动化训练
@@ -130,3 +120,5 @@
 | 2026-05-01 | 架构合理性评审 | `docs/tech/architecture-review-2026-05-01.md` |
 | 2026-05-01 | 静态产物冒烟测试脚本 | `scripts/static-preview.mjs`、`scripts/smoke-dist.mjs` |
 | 2026-05-01 | Playwright 浏览器测试安装与基础用例 | `playwright.config.ts`、`tests/e2e/mvp-practice.spec.ts` |
+| 2026-05-01 | 随时可打开的指板记忆界面 | `src/App.tsx`、`src/components/Fretboard/index.tsx` |
+| 2026-05-01 | 音名颜色与双向联动交互规格 | `docs/product/interaction-design-spec.md` |

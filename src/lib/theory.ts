@@ -24,6 +24,30 @@ const KEY_SCALE_NOTES: Record<PracticeKey, SharpNoteName[]> = {
 const SOLFEGGIO_BY_INDEX: Solfeggio[] = ['Do', 'Re', 'Mi', 'Fa', 'Sol', 'La', 'Si'];
 
 export const MVP_KEYS: PracticeKey[] = ['G major', 'C major'];
+export const ALL_SHARP_NOTES: SharpNoteName[] = SHARP_NOTES;
+export const SOLFEGGIOS: Solfeggio[] = SOLFEGGIO_BY_INDEX;
+
+export interface NoteColor {
+  fill: string;
+  stroke: string;
+  text: string;
+  softFill: string;
+}
+
+export const NOTE_COLORS: Record<SharpNoteName, NoteColor> = {
+  C: { fill: '#c62828', stroke: '#ff8a80', text: '#ffffff', softFill: '#8e1b1b' },
+  'C#': { fill: '#e85d3f', stroke: '#ffab91', text: '#ffffff', softFill: '#a13a2a' },
+  D: { fill: '#d96b1c', stroke: '#ffb86b', text: '#ffffff', softFill: '#944915' },
+  'D#': { fill: '#c78a00', stroke: '#ffd166', text: '#ffffff', softFill: '#8a6100' },
+  E: { fill: '#9f7a00', stroke: '#f6d365', text: '#ffffff', softFill: '#6f5600' },
+  F: { fill: '#2f8f3a', stroke: '#8ee99a', text: '#ffffff', softFill: '#22692b' },
+  'F#': { fill: '#1fa187', stroke: '#83ead7', text: '#ffffff', softFill: '#15725f' },
+  G: { fill: '#0b7f86', stroke: '#7dd3fc', text: '#ffffff', softFill: '#075c61' },
+  'G#': { fill: '#2b70c9', stroke: '#93c5fd', text: '#ffffff', softFill: '#1e4f90' },
+  A: { fill: '#3949ab', stroke: '#a5b4fc', text: '#ffffff', softFill: '#29357d' },
+  'A#': { fill: '#7b3fb8', stroke: '#d8b4fe', text: '#ffffff', softFill: '#582d84' },
+  B: { fill: '#8e24aa', stroke: '#f0abfc', text: '#ffffff', softFill: '#671a7b' },
+};
 
 export interface FretRange {
   min: number;
@@ -78,6 +102,14 @@ export function getSolfeggioInKey(noteName: SharpNoteName, key: PracticeKey): So
 /** 判断音名是否属于指定大调音阶 */
 export function isNoteInKey(noteName: SharpNoteName, key: PracticeKey): boolean {
   return KEY_SCALE_NOTES[key].includes(noteName);
+}
+
+/** 获取指定大调的音名到首调唱名映射 */
+export function getKeySolfeggioMap(key: PracticeKey): Array<{ noteName: SharpNoteName; solfeggio: Solfeggio }> {
+  return KEY_SCALE_NOTES[key].map((noteName, index) => ({
+    noteName,
+    solfeggio: SOLFEGGIO_BY_INDEX[index],
+  }));
 }
 
 /** 获取范围内所有物理位置 */
