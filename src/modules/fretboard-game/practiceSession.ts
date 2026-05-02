@@ -1,24 +1,56 @@
 import {
   getNoteAtPosition,
+  getKeySolfeggioMap,
   getPositionId,
+  getPositionsInRange,
   getPositionsInKey,
   getSolfeggioInKey,
   isGKeyFocusNote,
+  isSamePosition,
 } from '../../lib/theory';
-import type { FretPosition } from '../../types/theory';
-import type { AnswerRecord, MvpPracticeConfig, MvpQuestion, MvpQuestionType, PracticeSummary } from './types';
+import type { FretPosition, PracticeKey, SharpNoteName } from '../../types/theory';
+import type {
+  AnswerRecord,
+  MvpPracticeConfig,
+  MvpQuestion,
+  MvpQuestionType,
+  PracticeAnswerValue,
+  PracticeModeId,
+  PracticeSummary,
+} from './types';
+
+export interface PracticeModeOption {
+  id: PracticeModeId;
+  label: string;
+}
+
+export const PRACTICE_MODE_OPTIONS: PracticeModeOption[] = [
+  { id: 'mixed', label: '综合练习' },
+  { id: 'board-to-note', label: '指板音名' },
+  { id: 'board-to-solfeggio', label: '指板唱名' },
+  { id: 'tab-to-note', label: '六线谱音名' },
+  { id: 'tab-to-solfeggio', label: '六线谱唱名' },
+  { id: 'note-to-solfeggio', label: '音名唱名' },
+  { id: 'note-to-positions', label: '音名定位' },
+];
+
+export function getDefaultFretRangeForKey(key: PracticeKey): [number, number] {
+  return key === 'C major' ? [0, 3] : [0, 4];
+}
 
 export const DEFAULT_MVP_CONFIG: MvpPracticeConfig = {
+  modeId: 'mixed',
   key: 'G major',
-  fretRange: [0, 5],
+  fretRange: getDefaultFretRangeForKey('G major'),
   stringRange: [1, 6],
   questionCount: 20,
   questionTypeWeights: {
-    'board-to-note': 0.3,
-    'board-to-solfeggio': 0.25,
-    'tab-to-note': 0.2,
-    'tab-to-solfeggio': 0.15,
+    'board-to-note': 0.25,
+    'board-to-solfeggio': 0.22,
+    'tab-to-note': 0.18,
+    'tab-to-solfeggio': 0.13,
     'note-to-solfeggio': 0.1,
+    'note-to-positions': 0.12,
   },
 };
 
@@ -28,6 +60,7 @@ const QUESTION_PROMPTS: Record<MvpQuestionType, string> = {
   'tab-to-note': '六线谱上的这个位置是什么音名？',
   'tab-to-solfeggio': '在当前调里，六线谱上的这个位置唱什么？',
   'note-to-solfeggio': '在当前调里，这个音名唱什么？',
+  'note-to-positions': '在空指板上找出所有这个音名的位置',
 };
 
 function pickByWeight(weights: Record<MvpQuestionType, number>, index: number): MvpQuestionType {
@@ -52,6 +85,25 @@ function pickPosition(positions: FretPosition[], index: number, focusPositions: 
   return source[(index * 11 + 3) % source.length];
 }
 
+function resolveQuestionType(config: MvpPracticeConfig, index: number): MvpQuestionType {
+  return config.modeId === 'mixed' ? pickByWeight(config.questionTypeWeights, index) : config.modeId;
+}
+
+function pickTargetNote(key: PracticeKey, index: number): SharpNoteName {
+  const scaleNotes = getKeySolfeggioMap(key).map((item) => item.noteName);
+  return scaleNotes[(index * 5 + 2) % scaleNotes.length];
+}
+
+function getPositionsForNote(config: MvpPracticeConfig, noteName: SharpNoteName): FretPosition[] {
+  const [minFret, maxFret] = config.fretRange;
+  const [minString, maxString] = config.stringRange;
+
+  return getPositionsInRange(
+    { min: minFret, max: maxFret },
+    { min: minString as 1, max: maxString as 6 },
+  ).filter((position) => getNoteAtPosition(position) === noteName);
+}
+
 export function createQuestion(config: MvpPracticeConfig, index: number): MvpQuestion {
   const [minFret, maxFret] = config.fretRange;
   const [minString, maxString] = config.stringRange;
@@ -64,10 +116,35 @@ export function createQuestion(config: MvpPracticeConfig, index: number): MvpQue
   const position = pickPosition(positions, index, focusPositions);
   const noteName = getNoteAtPosition(position);
   const solfeggio = getSolfeggioInKey(noteName, config.key);
-  const type = pickByWeight(config.questionTypeWeights, index);
+  const type = resolveQuestionType(config, index);
 
   if (solfeggio === null) {
     throw new Error(`位置 ${getPositionId(position)} 不属于 ${config.key}`);
+  }
+
+  if (type === 'note-to-positions') {
+    const targetNoteName = pickTargetNote(config.key, index);
+    const targetSolfeggio = getSolfeggioInKey(targetNoteName, config.key);
+    const targetPositions = getPositionsForNote(config, targetNoteName);
+
+    if (targetSolfeggio === null || targetPositions.length === 0) {
+      throw new Error(`${config.key} 的 ${targetNoteName} 在当前范围内没有可用位置`);
+    }
+
+    return {
+      id: `${type}-${config.key}-${targetNoteName}-${index}`,
+      type,
+      key: config.key,
+      position: targetPositions[0],
+      noteName: targetNoteName,
+      solfeggio: targetSolfeggio,
+      answer: targetPositions,
+      targetPositions,
+      prompt: QUESTION_PROMPTS[type],
+      answerKind: 'positions',
+      sourceMedium: 'note',
+      isFocusNote: config.key === 'G major' && targetNoteName === 'F#',
+    };
   }
 
   const answerKind = type.endsWith('note') ? 'note' : 'solfeggio';
@@ -81,6 +158,7 @@ export function createQuestion(config: MvpPracticeConfig, index: number): MvpQue
     noteName,
     solfeggio,
     answer: answerKind === 'note' ? noteName : solfeggio,
+    targetPositions: [position],
     prompt: QUESTION_PROMPTS[type],
     answerKind,
     sourceMedium,
@@ -93,8 +171,33 @@ export function createQuestionSet(config: MvpPracticeConfig): MvpQuestion[] {
 }
 
 export function isSlowAnswer(question: MvpQuestion, responseMs: number): boolean {
-  const thresholdMs = question.answerKind === 'note' ? 4000 : 5000;
+  const thresholdMs = question.answerKind === 'note' ? 4000 : question.answerKind === 'positions' ? 9000 : 5000;
   return responseMs > thresholdMs;
+}
+
+export function getMissingPositions(expected: FretPosition[], actual: FretPosition[]): FretPosition[] {
+  return expected.filter((expectedPosition) => (
+    !actual.some((actualPosition) => isSamePosition(actualPosition, expectedPosition))
+  ));
+}
+
+export function getExtraPositions(expected: FretPosition[], actual: FretPosition[]): FretPosition[] {
+  return actual.filter((actualPosition) => (
+    !expected.some((expectedPosition) => isSamePosition(actualPosition, expectedPosition))
+  ));
+}
+
+export function isAnswerCorrect(question: MvpQuestion, userAnswer: PracticeAnswerValue): boolean {
+  if (question.answerKind !== 'positions') {
+    return userAnswer === question.answer;
+  }
+
+  if (!Array.isArray(userAnswer) || !Array.isArray(question.answer)) {
+    return false;
+  }
+
+  return getMissingPositions(question.answer, userAnswer).length === 0
+    && getExtraPositions(question.answer, userAnswer).length === 0;
 }
 
 export function createPracticeSummary(records: AnswerRecord[]): PracticeSummary {

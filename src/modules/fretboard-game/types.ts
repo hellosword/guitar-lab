@@ -5,11 +5,16 @@ export type MvpQuestionType =
   | 'board-to-solfeggio'
   | 'tab-to-note'
   | 'tab-to-solfeggio'
-  | 'note-to-solfeggio';
+  | 'note-to-solfeggio'
+  | 'note-to-positions';
 
+export type PracticeModeId = 'mixed' | MvpQuestionType;
 export type AnswerValue = SharpNoteName | Solfeggio;
+export type PositionAnswerValue = FretPosition[];
+export type PracticeAnswerValue = AnswerValue | PositionAnswerValue;
 
 export interface MvpPracticeConfig {
+  modeId: PracticeModeId;
   key: PracticeKey;
   fretRange: [number, number];
   stringRange: [number, number];
@@ -24,19 +29,22 @@ export interface MvpQuestion {
   position: FretPosition;
   noteName: SharpNoteName;
   solfeggio: Solfeggio;
-  answer: AnswerValue;
+  answer: PracticeAnswerValue;
+  targetPositions: FretPosition[];
   prompt: string;
-  answerKind: 'note' | 'solfeggio';
+  answerKind: 'note' | 'solfeggio' | 'positions';
   sourceMedium: 'board' | 'tab' | 'note';
   isFocusNote: boolean;
 }
 
 export interface AnswerRecord {
   question: MvpQuestion;
-  userAnswer: AnswerValue;
+  userAnswer: PracticeAnswerValue;
   isCorrect: boolean;
   responseMs: number;
   isSlow: boolean;
+  missedPositions: FretPosition[];
+  extraPositions: FretPosition[];
 }
 
 export interface PracticeSummary {

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
+import { APP_VERSION } from './appVersion';
 import Fretboard from './components/Fretboard';
-import type { FretboardPositionLabel } from './components/Fretboard';
+import type { FretboardPositionLabel, FretboardPositionState } from './components/Fretboard';
 import NoteSelector from './components/NoteSelector';
 import SolfeggioSelector from './components/SolfeggioSelector';
 import Tablature from './components/Tablature';
@@ -9,22 +10,47 @@ import {
   formatPosition,
   getKeySolfeggioMap,
   getNoteAtPosition,
+  getPositionId,
   getSolfeggioInKey,
   isNoteInKey,
+  isSamePosition,
   NOTE_COLORS,
 } from './lib/theory';
 import {
   createPracticeSummary,
   createQuestionSet,
   DEFAULT_MVP_CONFIG,
+  getDefaultFretRangeForKey,
+  getExtraPositions,
+  getMissingPositions,
+  isAnswerCorrect,
   isSlowAnswer,
+  PRACTICE_MODE_OPTIONS,
 } from './modules/fretboard-game/practiceSession';
-import type { AnswerRecord, AnswerValue, MvpPracticeConfig, MvpQuestion } from './modules/fretboard-game/types';
+import type {
+  AnswerRecord,
+  MvpPracticeConfig,
+  MvpQuestion,
+  PracticeAnswerValue,
+  PracticeModeId,
+} from './modules/fretboard-game/types';
 import type { FretPosition, PracticeKey, SharpNoteName } from './types/theory';
 
 const KEY_OPTIONS: PracticeKey[] = ['G major', 'C major'];
+const FAST_POSITION_RESPONSE_MS = 2500;
+const MASTERED_FAST_STREAK = 2;
 type AppView = 'practice' | 'memory';
 type FretboardMarkerMode = 'note' | 'solfeggio';
+
+interface PositionPracticeStats {
+  attempts: number;
+  correctCount: number;
+  wrongCount: number;
+  slowCount: number;
+  correctFastStreak: number;
+  lastResponseMs: number;
+  averageResponseMs: number;
+}
 
 function formatMs(ms: number): string {
   return `${(ms / 1000).toFixed(1)} 秒`;
@@ -32,6 +58,104 @@ function formatMs(ms: number): string {
 
 function formatPercent(value: number): string {
   return `${Math.round(value * 100)}%`;
+}
+
+function formatRange(config: MvpPracticeConfig): string {
+  const [minFret, maxFret] = config.fretRange;
+  return `${minFret}-${maxFret} 品`;
+}
+
+function getPracticeModeLabel(modeId: PracticeModeId): string {
+  return PRACTICE_MODE_OPTIONS.find((mode) => mode.id === modeId)?.label ?? '综合练习';
+}
+
+function formatPositions(positions: FretPosition[]): string {
+  return positions.length === 0 ? '未选择' : positions.map(formatPosition).join('、');
+}
+
+function formatAnswerValue(answer: PracticeAnswerValue): string {
+  return Array.isArray(answer) ? formatPositions(answer) : answer;
+}
+
+function getPositionStatsKey(question: MvpQuestion, position: FretPosition): string {
+  return `${question.key}|${question.type}|${question.noteName}|${getPositionId(position)}`;
+}
+
+function isPositionMastered(stats: PositionPracticeStats | undefined): boolean {
+  return stats !== undefined && stats.correctFastStreak >= MASTERED_FAST_STREAK;
+}
+
+function getPositionsToClick(question: MvpQuestion, masteredPositions: FretPosition[]): FretPosition[] {
+  if (question.answerKind !== 'positions') {
+    return [];
+  }
+
+  const remainingPositions = question.targetPositions.filter((targetPosition) => (
+    !masteredPositions.some((masteredPosition) => isSamePosition(masteredPosition, targetPosition))
+  ));
+
+  return remainingPositions.length === 0 ? question.targetPositions : remainingPositions;
+}
+
+function getAnswerPositionStates(
+  question: MvpQuestion,
+  selectedPositions: FretPosition[],
+  answeredRecord: AnswerRecord | null,
+): Record<string, FretboardPositionState> {
+  if (question.answerKind !== 'positions') {
+    return {};
+  }
+
+  if (answeredRecord === null) {
+    return selectedPositions.reduce<Record<string, FretboardPositionState>>((states, position) => {
+      states[getPositionId(position)] = 'correct';
+      return states;
+    }, {});
+  }
+
+  const states: Record<string, FretboardPositionState> = {};
+
+  if (Array.isArray(answeredRecord.userAnswer)) {
+    for (const position of answeredRecord.userAnswer) {
+      states[getPositionId(position)] = 'correct';
+    }
+  }
+
+  for (const position of answeredRecord.extraPositions) {
+    states[getPositionId(position)] = 'extra';
+  }
+
+  for (const position of answeredRecord.missedPositions) {
+    states[getPositionId(position)] = 'missed';
+  }
+
+  return states;
+}
+
+function getMasteredPositionLabel(
+  question: MvpQuestion,
+  masteredPositions: FretPosition[],
+  position: FretPosition,
+): FretboardPositionLabel | null {
+  if (question.answerKind !== 'positions') {
+    return null;
+  }
+
+  const isMastered = masteredPositions.some((masteredPosition) => isSamePosition(masteredPosition, position));
+
+  if (!isMastered) {
+    return null;
+  }
+
+  const noteColor = NOTE_COLORS[question.noteName];
+
+  return {
+    text: question.noteName,
+    tone: question.noteName.includes('#') ? 'accidental' : 'natural',
+    fill: noteColor.softFill,
+    stroke: noteColor.stroke,
+    textColor: noteColor.text,
+  };
 }
 
 function App() {
@@ -45,11 +169,16 @@ function App() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [records, setRecords] = useState<AnswerRecord[]>([]);
   const [answeredRecord, setAnsweredRecord] = useState<AnswerRecord | null>(null);
+  const [selectedAnswerPositions, setSelectedAnswerPositions] = useState<FretPosition[]>([]);
+  const [masteredAnswerPositions, setMasteredAnswerPositions] = useState<FretPosition[]>([]);
+  const [positionPracticeStats, setPositionPracticeStats] = useState<Record<string, PositionPracticeStats>>({});
   const [questionStartedAt, setQuestionStartedAt] = useState(() => performance.now());
+  const [positionStartedAt, setPositionStartedAt] = useState(() => performance.now());
 
   const currentQuestion = questions[currentIndex];
   const isFinished = currentIndex >= questions.length;
   const summary = useMemo(() => createPracticeSummary(records), [records]);
+  const positionsToClick = currentQuestion === undefined ? [] : getPositionsToClick(currentQuestion, masteredAnswerPositions);
 
   useEffect(() => {
     if (currentQuestion === undefined) {
@@ -61,14 +190,41 @@ function App() {
     });
   }, [currentQuestion]);
 
-  function restartPractice(nextKey = config.key): void {
-    const nextConfig = { ...config, key: nextKey };
+  useEffect(() => {
+    if (currentQuestion === undefined || currentQuestion.answerKind !== 'positions') {
+      setMasteredAnswerPositions([]);
+      return;
+    }
+
+    const masteredPositions = currentQuestion.targetPositions.filter((position) => (
+      isPositionMastered(positionPracticeStats[getPositionStatsKey(currentQuestion, position)])
+    ));
+
+    setMasteredAnswerPositions(masteredPositions.length === currentQuestion.targetPositions.length ? [] : masteredPositions);
+    setPositionStartedAt(performance.now());
+  }, [currentQuestion?.id]);
+
+  function restartPractice(nextKey = config.key, nextModeId = config.modeId): void {
+    const nextConfig = {
+      ...config,
+      modeId: nextModeId,
+      key: nextKey,
+      fretRange: getDefaultFretRangeForKey(nextKey),
+    };
     setConfig(nextConfig);
     setQuestions(createQuestionSet(nextConfig));
     setCurrentIndex(0);
     setRecords([]);
     setAnsweredRecord(null);
+    setSelectedAnswerPositions([]);
+    setMasteredAnswerPositions([]);
+    setPositionPracticeStats({});
     setQuestionStartedAt(performance.now());
+    setPositionStartedAt(performance.now());
+  }
+
+  function handleModeChange(nextModeId: PracticeModeId): void {
+    restartPractice(config.key, nextModeId);
   }
 
   function handleKeyChange(nextKey: PracticeKey): void {
@@ -77,32 +233,143 @@ function App() {
       return;
     }
 
-    setConfig((previous) => ({ ...previous, key: nextKey }));
+    setConfig((previous) => ({ ...previous, key: nextKey, fretRange: getDefaultFretRangeForKey(nextKey) }));
   }
 
-  function handleAnswer(userAnswer: AnswerValue): void {
+  function completeAnswer(userAnswer: PracticeAnswerValue): void {
     if (answeredRecord !== null || currentQuestion === undefined) {
       return;
     }
 
     const responseMs = Math.round(performance.now() - questionStartedAt);
+    const missedPositions = currentQuestion.answerKind === 'positions' && Array.isArray(userAnswer) && Array.isArray(currentQuestion.answer)
+      ? getMissingPositions(currentQuestion.answer, userAnswer)
+      : [];
+    const extraPositions = currentQuestion.answerKind === 'positions' && Array.isArray(userAnswer) && Array.isArray(currentQuestion.answer)
+      ? getExtraPositions(currentQuestion.answer, userAnswer)
+      : [];
     const record: AnswerRecord = {
       question: currentQuestion,
       userAnswer,
-      isCorrect: userAnswer === currentQuestion.answer,
+      isCorrect: isAnswerCorrect(currentQuestion, userAnswer),
       responseMs,
       isSlow: isSlowAnswer(currentQuestion, responseMs),
+      missedPositions,
+      extraPositions,
     };
 
     setAnsweredRecord(record);
     setRecords((previous) => [...previous, record]);
+
+    if (currentQuestion.answerKind === 'positions') {
+      for (const missedPosition of missedPositions) {
+        updatePositionPracticeStats(currentQuestion, missedPosition, false, responseMs);
+      }
+
+      for (const extraPosition of extraPositions) {
+        updatePositionPracticeStats(currentQuestion, extraPosition, false, responseMs);
+      }
+    } else {
+      updatePositionPracticeStats(currentQuestion, currentQuestion.position, record.isCorrect, responseMs);
+    }
+  }
+
+  function handleAnswer(userAnswer: PracticeAnswerValue): void {
+    completeAnswer(userAnswer);
+  }
+
+  function handlePositionAnswerClick(position: FretPosition): void {
+    if (answeredRecord !== null || currentQuestion === undefined || currentQuestion.answerKind !== 'positions') {
+      return;
+    }
+
+    playFretboardPosition(position);
+
+    if (!Array.isArray(currentQuestion.answer)) {
+      return;
+    }
+
+    const isMasteredPosition = masteredAnswerPositions.some((masteredPosition) => isSamePosition(masteredPosition, position));
+
+    if (isMasteredPosition) {
+      return;
+    }
+
+    const alreadyFound = selectedAnswerPositions.some((selected) => isSamePosition(selected, position));
+
+    if (alreadyFound) {
+      return;
+    }
+
+    const isTargetPosition = positionsToClick.some((targetPosition) => isSamePosition(targetPosition, position));
+
+    if (!isTargetPosition) {
+      completeAnswer([...masteredAnswerPositions, ...selectedAnswerPositions, position]);
+      return;
+    }
+
+    const now = performance.now();
+    updatePositionPracticeStats(currentQuestion, position, true, Math.round(now - positionStartedAt));
+    setPositionStartedAt(now);
+
+    const nextSelectedPositions = [...selectedAnswerPositions, position];
+    setSelectedAnswerPositions(nextSelectedPositions);
+
+    if (getMissingPositions(positionsToClick, nextSelectedPositions).length === 0) {
+      completeAnswer([...masteredAnswerPositions, ...nextSelectedPositions]);
+    }
+  }
+
+  function updatePositionPracticeStats(
+    question: MvpQuestion,
+    position: FretPosition,
+    isCorrect: boolean,
+    responseMs: number,
+  ): void {
+    const statsKey = getPositionStatsKey(question, position);
+    const isSlow = responseMs > FAST_POSITION_RESPONSE_MS;
+
+    setPositionPracticeStats((previous) => {
+      const currentStats = previous[statsKey] ?? {
+        attempts: 0,
+        correctCount: 0,
+        wrongCount: 0,
+        slowCount: 0,
+        correctFastStreak: 0,
+        lastResponseMs: 0,
+        averageResponseMs: 0,
+      };
+      const attempts = currentStats.attempts + 1;
+      const correctCount = currentStats.correctCount + (isCorrect ? 1 : 0);
+      const wrongCount = currentStats.wrongCount + (isCorrect ? 0 : 1);
+      const slowCount = currentStats.slowCount + (isSlow ? 1 : 0);
+      const averageResponseMs = Math.round(
+        (currentStats.averageResponseMs * currentStats.attempts + responseMs) / attempts,
+      );
+
+      return {
+        ...previous,
+        [statsKey]: {
+          attempts,
+          correctCount,
+          wrongCount,
+          slowCount,
+          averageResponseMs,
+          lastResponseMs: responseMs,
+          correctFastStreak: isCorrect && !isSlow ? currentStats.correctFastStreak + 1 : 0,
+        },
+      };
+    });
   }
 
   function goToNextQuestion(): void {
     const nextIndex = currentIndex + 1;
     setCurrentIndex(nextIndex);
     setAnsweredRecord(null);
+    setSelectedAnswerPositions([]);
+    setMasteredAnswerPositions([]);
     setQuestionStartedAt(performance.now());
+    setPositionStartedAt(performance.now());
   }
 
   function replayCurrentPitch(): void {
@@ -129,10 +396,15 @@ function App() {
       <div className="mx-auto flex min-h-screen w-full max-w-6xl flex-col gap-5 px-4 py-5">
         <header className="flex flex-col gap-4 border-b border-white/10 pb-4 md:flex-row md:items-end md:justify-between">
           <div>
-            <p className="text-sm font-medium text-guitar-accent">Guitar Lab MVP</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-sm font-medium text-guitar-accent">Guitar Lab MVP</p>
+              <span className="rounded-md border border-white/10 bg-white/8 px-2 py-1 text-xs font-semibold text-slate-300">
+                v{APP_VERSION}
+              </span>
+            </div>
             <h1 className="mt-1 text-2xl font-bold tracking-normal md:text-3xl">位置、音名、唱名反应训练</h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
-              先把 0-5 品里的位置和 G/C 大调唱名练熟。答题后会同时显示位置、音名和唱名，重点补强 G 大调 F#。
+              先把开放把位里的位置和 G/C 大调唱名练熟。答题后会同时显示位置、音名和唱名，重点补强 G 大调 F#。
             </p>
           </div>
 
@@ -230,6 +502,11 @@ function App() {
           currentQuestion && (
             <section className="grid flex-1 gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
               <div className="space-y-5">
+                <PracticeModeSelector
+                  activeModeId={config.modeId}
+                  onModeChange={handleModeChange}
+                />
+
                 <div className="rounded-lg border border-white/10 bg-white/10 p-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
@@ -239,7 +516,7 @@ function App() {
                       <h2 className="mt-2 text-xl font-semibold">{currentQuestion.prompt}</h2>
                     </div>
                     <div className="rounded-md bg-black/25 px-3 py-2 text-sm text-slate-300">
-                      {config.key === 'G major' ? 'G 大调' : 'C 大调'} · 0-5 品
+                      {config.key === 'G major' ? 'G 大调' : 'C 大调'} · {formatRange(config)} · {getPracticeModeLabel(config.modeId)}
                     </div>
                   </div>
                 </div>
@@ -247,7 +524,7 @@ function App() {
                 <div className="rounded-lg border border-white/10 bg-white/10 p-4">
                   {currentQuestion.sourceMedium === 'board' && (
                     <Fretboard
-                      fretCount={5}
+                      fretCount={config.fretRange[1]}
                       highlightedPosition={currentQuestion.position}
                       onPositionClick={playFretboardPosition}
                     />
@@ -256,23 +533,38 @@ function App() {
                     <Tablature position={currentQuestion.position} />
                   )}
                   {currentQuestion.sourceMedium === 'note' && (
-                    <div className="grid min-h-[260px] place-items-center rounded-lg bg-[#171420]">
+                    <div className="grid min-h-[220px] place-items-center rounded-lg bg-[#171420]">
                       <div className="text-center">
                         <p className="text-sm text-slate-500">音名</p>
                         <p className="mt-3 text-7xl font-bold text-white">{currentQuestion.noteName}</p>
                         <p className="mt-3 text-sm text-slate-400">
-                          {currentQuestion.key === 'G major' ? 'G 大调' : 'C 大调'}中唱什么？
+                          {currentQuestion.answerKind === 'positions'
+                            ? `在${formatRange(config)}内找出所有 ${currentQuestion.noteName}`
+                            : `${currentQuestion.key === 'G major' ? 'G 大调' : 'C 大调'}中唱什么？`}
                         </p>
                       </div>
                     </div>
                   )}
                 </div>
 
+                {currentQuestion.answerKind === 'positions' && (
+                  <div className="rounded-lg border border-white/10 bg-white/10 p-4">
+                    <p className="mb-3 text-sm text-slate-400">空指板</p>
+                    <Fretboard
+                      fretCount={config.fretRange[1]}
+                      selectedPositions={answeredRecord === null ? selectedAnswerPositions : []}
+                      positionStates={getAnswerPositionStates(currentQuestion, selectedAnswerPositions, answeredRecord)}
+                      getPositionLabel={(position) => getMasteredPositionLabel(currentQuestion, masteredAnswerPositions, position)}
+                      onPositionClick={handlePositionAnswerClick}
+                    />
+                  </div>
+                )}
+
                 {currentQuestion.sourceMedium === 'tab' && (
                   <div className="rounded-lg border border-white/10 bg-white/10 p-4">
                     <p className="mb-3 text-sm text-slate-400">对应指板位置</p>
                     <Fretboard
-                      fretCount={5}
+                      fretCount={config.fretRange[1]}
                       highlightedPosition={currentQuestion.position}
                       onPositionClick={playFretboardPosition}
                     />
@@ -283,12 +575,18 @@ function App() {
               <aside className="flex flex-col gap-4 rounded-lg border border-white/10 bg-[#171a27] p-4">
                 <div>
                   <p className="text-sm font-semibold text-slate-200">
-                    {currentQuestion.answerKind === 'note' ? '选择音名' : '选择唱名'}
+                    {currentQuestion.answerKind === 'note'
+                      ? '选择音名'
+                      : currentQuestion.answerKind === 'positions'
+                        ? '选择所有位置'
+                        : '选择唱名'}
                   </p>
                   <p className="mt-1 text-sm text-slate-500">
                     {currentQuestion.answerKind === 'note'
                       ? '一键选择音名，先追求反应速度。'
-                      : '使用首调唱名，G 大调里 D 是 Sol。'}
+                      : currentQuestion.answerKind === 'positions'
+                        ? '点击空指板上的目标音，系统会立即判定。'
+                        : '使用首调唱名，G 大调里 D 是 Sol。'}
                   </p>
                 </div>
 
@@ -302,6 +600,13 @@ function App() {
 
                 {currentQuestion.answerKind === 'note' ? (
                   <NoteSelector disabled={answeredRecord !== null} onSubmit={handleAnswer} />
+                ) : currentQuestion.answerKind === 'positions' ? (
+                  <PositionHuntPanel
+                    foundCount={selectedAnswerPositions.length}
+                    targetCount={positionsToClick.length}
+                    masteredCount={masteredAnswerPositions.length}
+                    isComplete={answeredRecord !== null}
+                  />
                 ) : (
                   <SolfeggioSelector disabled={answeredRecord !== null} onSubmit={handleAnswer} />
                 )}
@@ -336,21 +641,89 @@ interface FeedbackPanelProps {
   onReplay: () => Promise<void>;
 }
 
+interface PracticeModeSelectorProps {
+  activeModeId: PracticeModeId;
+  onModeChange: (modeId: PracticeModeId) => void;
+}
+
+function PracticeModeSelector({ activeModeId, onModeChange }: PracticeModeSelectorProps) {
+  return (
+    <div className="rounded-lg border border-white/10 bg-white/10 p-4">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div>
+          <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Practice Mode</p>
+          <h2 className="mt-1 text-lg font-semibold">练习模式</h2>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          {PRACTICE_MODE_OPTIONS.map((mode) => (
+            <button
+              key={mode.id}
+              type="button"
+              onClick={() => onModeChange(mode.id)}
+              className={`h-9 rounded-md border px-3 text-sm font-semibold transition ${
+                activeModeId === mode.id
+                  ? 'border-guitar-accent bg-guitar-accent text-white'
+                  : 'border-white/15 bg-white/8 text-slate-200 hover:bg-white/15'
+              }`}
+            >
+              {mode.label}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+interface PositionHuntPanelProps {
+  foundCount: number;
+  targetCount: number;
+  masteredCount: number;
+  isComplete: boolean;
+}
+
+function PositionHuntPanel({ foundCount, targetCount, masteredCount, isComplete }: PositionHuntPanelProps) {
+  return (
+    <div className="rounded-lg border border-white/10 bg-black/20 p-3">
+      <p className="text-sm font-semibold text-slate-200">
+        已找到 {foundCount} / {targetCount}
+      </p>
+      {masteredCount > 0 && (
+        <p className="mt-2 text-sm leading-6 text-slate-400">
+          已掌握的 {masteredCount} 个位置已用音名圆点提示。
+        </p>
+      )}
+      <p className="mt-2 text-sm leading-6 text-slate-500">
+        {isComplete ? '本题已结束，观察反馈后进入下一题。' : '点对会立刻标记，点错会结束本题并揭示答案。'}
+      </p>
+    </div>
+  );
+}
+
 function FeedbackPanel({ record, isLast, onNext, onReplay }: FeedbackPanelProps) {
   const { question } = record;
+  const isPositionAnswer = question.answerKind === 'positions';
 
   return (
     <div className={`rounded-lg border p-4 ${record.isCorrect ? 'border-emerald-400/40 bg-emerald-400/10' : 'border-rose-400/40 bg-rose-400/10'}`}>
       <p className="text-lg font-bold">{record.isCorrect ? '答对了' : '再记一次'}</p>
       <div className="mt-3 space-y-2 text-sm text-slate-200">
-        <p>你的答案：{record.userAnswer}</p>
-        <p>正确答案：{question.answer}</p>
-        <p>位置：{formatPosition(question.position)}</p>
+        <p>你的答案：{formatAnswerValue(record.userAnswer)}</p>
+        <p>正确答案：{formatAnswerValue(question.answer)}</p>
+        {!isPositionAnswer && <p>位置：{formatPosition(question.position)}</p>}
         <p>音名：{question.noteName}</p>
         <p>{question.key === 'G major' ? 'G 大调' : 'C 大调'}唱名：{question.solfeggio}</p>
-        <p>
-          反应链：{formatPosition(question.position)} {'->'} {question.noteName} {'->'} {question.solfeggio}
-        </p>
+        {isPositionAnswer ? (
+          <>
+            {record.missedPositions.length > 0 && <p>漏点：{formatPositions(record.missedPositions)}</p>}
+            {record.extraPositions.length > 0 && <p>误点：{formatPositions(record.extraPositions)}</p>}
+          </>
+        ) : (
+          <p>
+            反应链：{formatPosition(question.position)} {'->'} {question.noteName} {'->'} {question.solfeggio}
+          </p>
+        )}
         <p>耗时：{formatMs(record.responseMs)}{record.isSlow ? '，需要巩固' : ''}</p>
       </div>
 

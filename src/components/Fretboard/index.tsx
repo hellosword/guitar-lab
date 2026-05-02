@@ -15,13 +15,30 @@ export interface FretboardPositionLabel {
   muted?: boolean;
 }
 
+export type FretboardPositionState = 'selected' | 'correct' | 'missed' | 'extra';
+
 interface FretboardProps {
   fretCount?: number;
   highlightedPosition?: FretPosition;
   selectedPositions?: FretPosition[];
+  positionStates?: Record<string, FretboardPositionState>;
   getPositionLabel?: (position: FretPosition) => FretboardPositionLabel | string | null;
   onPositionClick?: (position: FretPosition) => void;
 }
+
+const POSITION_STATE_STYLES: Record<FretboardPositionState, { fill: string; stroke: string }> = {
+  selected: { fill: '#38bdf8', stroke: '#ffffff' },
+  correct: { fill: '#16a34a', stroke: '#bbf7d0' },
+  missed: { fill: '#ca8a04', stroke: '#fef08a' },
+  extra: { fill: '#e11d48', stroke: '#fecdd3' },
+};
+
+const POSITION_STATE_MARKS: Partial<Record<FretboardPositionState, string>> = {
+  selected: '+',
+  correct: '✓',
+  missed: '!',
+  extra: '×',
+};
 
 const STRINGS = [1, 2, 3, 4, 5, 6] as const;
 const STRING_LABELS: Record<number, string> = {
@@ -37,6 +54,7 @@ export default function Fretboard({
   fretCount = 5,
   highlightedPosition,
   selectedPositions = [],
+  positionStates = {},
   getPositionLabel,
   onPositionClick,
 }: FretboardProps) {
@@ -136,12 +154,14 @@ export default function Fretboard({
       {STRINGS.flatMap((string) => (
         Array.from({ length: fretCount + 1 }, (_, fret) => {
           const position: FretPosition = { string, fret };
+          const positionState = positionStates[getPositionId(position)];
           const isHighlighted = highlightedPosition !== undefined && isSamePosition(position, highlightedPosition);
           const isSelected = selectedPositions.some((selected) => isSamePosition(selected, position));
           const x = getFretCenterX(fret);
           const y = getStringY(string);
-          const fill = isHighlighted ? '#e94560' : isSelected ? '#38bdf8' : 'transparent';
-          const stroke = isHighlighted || isSelected ? '#ffffff' : 'transparent';
+          const stateStyle = positionState === undefined ? null : POSITION_STATE_STYLES[positionState];
+          const fill = isHighlighted ? '#e94560' : stateStyle?.fill ?? (isSelected ? '#38bdf8' : 'transparent');
+          const stroke = isHighlighted ? '#ffffff' : stateStyle?.stroke ?? (isSelected ? '#ffffff' : 'transparent');
           const rawLabel = getPositionLabel?.(position);
           const label = typeof rawLabel === 'string' ? { text: rawLabel, tone: 'neutral' as const } : rawLabel;
           const hasLabel = label !== null && label !== undefined;
@@ -151,6 +171,7 @@ export default function Fretboard({
           const resolvedFill = label?.muted ? '#1f2937' : label?.fill ?? circleFill;
           const resolvedStroke = label?.muted ? '#475569' : label?.stroke ?? circleStroke;
           const resolvedText = label?.muted ? '#94a3b8' : label?.textColor ?? labelFill;
+          const stateMark = positionState === undefined ? null : POSITION_STATE_MARKS[positionState] ?? null;
 
           return (
             <g
@@ -173,8 +194,8 @@ export default function Fretboard({
                 cx={x}
                 cy={y}
                 r={hasLabel ? 18 : 15}
-                fill={hasLabel ? (isHighlighted ? '#e94560' : isSelected ? '#38bdf8' : resolvedFill) : fill}
-                stroke={hasLabel ? (isHighlighted || isSelected ? '#ffffff' : resolvedStroke) : stroke}
+                fill={hasLabel ? (isHighlighted ? '#e94560' : stateStyle?.fill ?? (isSelected ? '#38bdf8' : resolvedFill)) : fill}
+                stroke={hasLabel ? (isHighlighted ? '#ffffff' : stateStyle?.stroke ?? (isSelected ? '#ffffff' : resolvedStroke)) : stroke}
                 strokeWidth={hasLabel ? (label?.muted ? 1 : 2) : 2}
                 className="transition-opacity hover:opacity-80"
               />
@@ -189,6 +210,19 @@ export default function Fretboard({
                   pointerEvents="none"
                 >
                   {label.text}
+                </text>
+              )}
+              {!hasLabel && stateMark !== null && (
+                <text
+                  x={x}
+                  y={y + 6}
+                  fill="#ffffff"
+                  fontSize={18}
+                  fontWeight="900"
+                  textAnchor="middle"
+                  pointerEvents="none"
+                >
+                  {stateMark}
                 </text>
               )}
             </g>

@@ -1,13 +1,16 @@
 {
   "name": "guitar-lab",
   "private": true,
-  "version": "0.0.1",
+  "version": "0.0.3",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "build:pwa": "tsc && vite build --mode pwa",
+    "build:release": "npm run build:pwa",
     "preview": "vite preview",
     "preview:static": "node scripts/static-preview.mjs",
+    "server:start": "start-server.bat",
     "test:smoke": "node scripts/smoke-dist.mjs",
     "test:e2e": "playwright test"
   },

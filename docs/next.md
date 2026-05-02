@@ -3,20 +3,27 @@
 > 记录当前项目中所有合理的下一步行动，按优先级和类别组织。
 > AI 助手在对话中发现合理的 next step 时，应主动追加到本文档末尾。
 > 人类完成某项后，将其移动到"已完成"区域，不要删除。
+> 完成项必须记录对应版本号；可见产品改动应同步递增页面版本号，并在提交信息/tag 中带上同一版本号。
+
+版本记录约定：
+- 页面版本号来源：`src/appVersion.ts`
+- `docs/next.md` 已完成项版本列使用同一编号，如 `v0.0.2`
+- 提交信息建议格式：`v0.0.2: Add visible app version`
+- Git tag 建议格式：`v0.0.2`
 
 ---
 
 ## 高优先级（建议本周内）
 
-### 开发：最小练习闭环原型
-- **来源**：`docs/product/mvp-learning-loop-review.md`、`docs/tech/architecture-review-2026-05-01.md`
-- **内容**：实现第一版可运行练习闭环，聚焦 G/C 大调 0-5 品的“位置/六线谱 -> 音名/唱名”自动化训练
-  - 乐理基础函数：标准调弦位置到音名、C/G 大调唱名、0-5 品位置池
-  - 核心组件：SVG 指板图、音名选择器、唱名选择器、单音六线谱展示
-  - 游戏循环：出题、作答、即时反馈、下一题、练习总结
-  - 练习记录：正确率、反应时间、错题/慢题、F# 相关表现
-  - 架构策略：先用轻量题型工厂和 TypeScript 配置，不急于完整 PlayMode/Generator/Validator 注册表
-- **预期产出**：可运行的 MVP 原型
+### 开发：学习效果闭环与弱点复练
+- **来源**：本次对话（2026-05-01），基于当前可运行 MVP 的下一步判断
+- **内容**：让练习系统记录“哪些位置、音名、唱名反应慢或答错”，并把这些弱点自动带回后续出题
+  - 记录每道题的题型、调性、位置、正确性、反应时间
+  - 汇总 G 大调下 F#、D→So、位置→音名→唱名等薄弱映射
+  - 练习结束展示慢题/错题清单，而不只是总体正确率
+  - 下一轮练习提高弱点权重，形成最小自适应训练
+  - 优先覆盖当前核心目标：开放把位（C 大调 0-3 品、G 大调 0-4 品）的“指板位置 → 音名 → 首调唱名”
+- **预期产出**：可感知进步的个人化练习闭环
 
 ### 产品：指板音名记忆玩法定义文档
 - **来源**：本次对话（2026-04-26），`docs/product/guitar-fretboard-game-design.md` 第 10 节后续待办
@@ -108,17 +115,26 @@
 
 ## 已完成 ✅
 
-| 日期 | 事项 | 产出位置 |
-|------|------|---------|
-| 2026-04-25 | 技术选型与架构设计 | `docs/tech/tech-stack.md`、`docs/tech/question-bank-architecture.md` |
-| 2026-04-25 | 乐理框架与玩法设计 | `docs/product/guitar-fretboard-game-design.md` |
-| 2026-04-25 | AI 交互设计方法调研 | `docs/methods/ai-interaction-design/` |
-| 2026-04-25 | 项目骨架搭建 | 项目根目录（Vite + React + TS + Tailwind） |
-| 2026-05-01 | 个人学习目标校准 | `docs/product/learning-goal-calibration.md` |
-| 2026-05-01 | 最小练习闭环规格 | `docs/product/mvp-learning-loop-review.md` |
-| 2026-05-01 | 核心闭环优先产品设计方法 | `docs/methods/core-loop-first-product-design.md` |
-| 2026-05-01 | 架构合理性评审 | `docs/tech/architecture-review-2026-05-01.md` |
-| 2026-05-01 | 静态产物冒烟测试脚本 | `scripts/static-preview.mjs`、`scripts/smoke-dist.mjs` |
-| 2026-05-01 | Playwright 浏览器测试安装与基础用例 | `playwright.config.ts`、`tests/e2e/mvp-practice.spec.ts` |
-| 2026-05-01 | 随时可打开的指板记忆界面 | `src/App.tsx`、`src/components/Fretboard/index.tsx` |
-| 2026-05-01 | 音名颜色与双向联动交互规格 | `docs/product/interaction-design-spec.md` |
+| 日期 | 版本/标签 | 事项 | 产出位置 |
+|------|----------|------|---------|
+| 2026-04-25 | 文档期 | 技术选型与架构设计 | `docs/tech/tech-stack.md`、`docs/tech/question-bank-architecture.md` |
+| 2026-04-25 | 文档期 | 乐理框架与玩法设计 | `docs/product/guitar-fretboard-game-design.md` |
+| 2026-04-25 | 文档期 | AI 交互设计方法调研 | `docs/methods/ai-interaction-design/` |
+| 2026-04-25 | v0.0.1 | 项目骨架搭建 | 项目根目录（Vite + React + TS + Tailwind） |
+| 2026-05-01 | v0.0.1 | 个人学习目标校准 | `docs/product/learning-goal-calibration.md` |
+| 2026-05-01 | v0.0.1 | 最小练习闭环规格 | `docs/product/mvp-learning-loop-review.md` |
+| 2026-05-01 | v0.0.1 | 核心闭环优先产品设计方法 | `docs/methods/core-loop-first-product-design.md` |
+| 2026-05-01 | v0.0.1 | 架构合理性评审 | `docs/tech/architecture-review-2026-05-01.md` |
+| 2026-05-01 | v0.0.1 | 静态产物冒烟测试脚本 | `scripts/static-preview.mjs`、`scripts/smoke-dist.mjs` |
+| 2026-05-01 | v0.0.1 | Playwright 浏览器测试安装与基础用例 | `playwright.config.ts`、`tests/e2e/mvp-practice.spec.ts` |
+| 2026-05-01 | v0.0.1 | 最小练习闭环原型 | `src/App.tsx`、`src/modules/fretboard-game/practiceSession.ts`、`src/components/` |
+| 2026-05-01 | v0.0.1 | 随时可打开的指板记忆界面 | `src/App.tsx`、`src/components/Fretboard/index.tsx` |
+| 2026-05-01 | v0.0.1 | 音名颜色与双向联动交互规格 | `docs/product/interaction-design-spec.md` |
+| 2026-05-01 | v0.0.2 | 音名定位题型（N→P 多点点击） | `src/modules/fretboard-game/practiceSession.ts`、`src/App.tsx`、`tests/e2e/mvp-practice.spec.ts` |
+| 2026-05-01 | v0.0.2 | 正式练习模式选择 | `src/modules/fretboard-game/practiceSession.ts`、`src/App.tsx`、`tests/e2e/mvp-practice.spec.ts` |
+| 2026-05-01 | v0.0.2 | 音名定位点击即判定交互 | `src/App.tsx`、`src/components/Fretboard/index.tsx`、`tests/e2e/mvp-practice.spec.ts` |
+| 2026-05-01 | v0.0.2 | 音名定位本轮位置熟练度提示 | `src/App.tsx`、`tests/e2e/mvp-practice.spec.ts` |
+| 2026-05-01 | v0.0.2 | 页面版本号显示 | `src/appVersion.ts`、`src/App.tsx` |
+| 2026-05-02 | v0.0.3 | 本地预览禁用 PWA 离线缓存，正式发布改用 `build:pwa` | `vite.config.ts`、`package.json`、`src/appVersion.ts` |
+| 2026-05-02 | 文档期 | 前端项目基础概念入门文档 | `docs/knowledge/frontend-project-basics-for-beginners.md` |
+| 2026-05-02 | 文档期 | 前端项目基础概念入门文档重构：增加游戏开发/Python 类比与拓扑顺序 | `docs/knowledge/frontend-project-basics-for-beginners.md` |
