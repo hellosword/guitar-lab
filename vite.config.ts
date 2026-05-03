@@ -1,12 +1,28 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
+import { execSync } from 'node:child_process';
+
+function readGitInfo(command: string, fallback: string): string {
+  try {
+    const value = execSync(command, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+    return value || fallback;
+  } catch {
+    return fallback;
+  }
+}
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
   const isPwaBuild = mode === 'pwa';
+  const gitBranch = readGitInfo('git branch --show-current', 'dev');
+  const gitCommit = readGitInfo('git rev-parse --short HEAD', 'unknown');
 
   return {
+    define: {
+      __GIT_BRANCH__: JSON.stringify(gitBranch),
+      __GIT_COMMIT__: JSON.stringify(gitCommit),
+    },
     plugins: [
       react(),
       VitePWA({

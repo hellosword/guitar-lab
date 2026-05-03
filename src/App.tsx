@@ -69,6 +69,7 @@ const KEY_OPTIONS: PracticeKey[] = ['G major', 'C major'];
 const FAST_POSITION_RESPONSE_MS = 2500;
 const MASTERED_FAST_STREAK = 2;
 const GUITAR_TONE_STORAGE_KEY = 'guitar-lab:guitar-tone';
+const BUILD_LABEL = __GIT_COMMIT__ === 'unknown' ? __GIT_BRANCH__ : `${__GIT_BRANCH__}@${__GIT_COMMIT__}`;
 type AppView = 'practice' | 'reference';
 type PracticeSubView = 'train' | 'weakness';
 type FretboardMarkerMode = 'note' | 'solfeggio';
@@ -1030,6 +1031,12 @@ function App() {
               <p className="text-sm font-semibold text-guitar-accent">Guitar Lab</p>
               <span className="rounded-md border border-white/10 bg-white/8 px-2 py-1 text-xs font-semibold text-slate-300">
                 v{APP_VERSION}
+              </span>
+              <span
+                className="rounded-md border border-white/10 bg-white/5 px-2 py-1 text-xs font-medium text-slate-400"
+                title="当前页面构建来源"
+              >
+                {BUILD_LABEL}
               </span>
             </div>
             <h1 className="text-lg font-bold tracking-normal text-slate-50 md:text-xl">位置、音名、唱名反应训练</h1>
