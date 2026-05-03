@@ -15,7 +15,7 @@
 
 ## 高优先级（建议本周内）
 
-### 开发：v0.0.7 弱点地图与慢速可视化
+### 开发：v0.0.8 弱点地图与慢速可视化
 - **来源**：2026-05-03 练习数据复盘
 - **内容**：在练习结束或专门页面展示哪些指板位置反应慢
   - 用指板热力/标记显示弱点位置
@@ -151,3 +151,4 @@
 | 2026-05-03 | v0.0.4 | 自适应练习记忆 MVP：版本化数据、位置级记录、弱点加权、导入导出、开发期同步 | `src/modules/fretboard-game/practiceMemory.ts`、`src/modules/fretboard-game/adaptivePracticeConfig.ts`、`src/App.tsx`、`scripts/static-preview.mjs` |
 | 2026-05-03 | v0.0.5 | 自适应统计逻辑校准：全局分组慢题判断与漏点计分修正 | `src/modules/fretboard-game/practiceMemory.ts`、`tests/e2e/mvp-practice.spec.ts` |
 | 2026-05-03 | v0.0.6 | 音名定位全对后自动进入下一题，修复全对停留在 1/1 的卡住感 | `src/App.tsx`、`tests/e2e/mvp-practice.spec.ts` |
+| 2026-05-03 | v0.0.7 | 音名定位题锁定开题时的预提示集合，避免点击后突然出现已掌握标记 | `src/App.tsx`、`tests/e2e/mvp-practice.spec.ts` |

@@ -241,7 +241,7 @@ function App() {
 
     setMasteredAnswerPositions(masteredPositions.length === currentQuestion.targetPositions.length ? [] : masteredPositions);
     setPositionStartedAt(performance.now());
-  }, [currentQuestion?.id, practiceMemory]);
+  }, [currentQuestion?.id]);
 
   function restartPractice(nextKey = config.key, nextModeId = config.modeId): void {
     const nextConfig = {
