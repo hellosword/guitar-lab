@@ -1,6 +1,5 @@
 import {
   getNoteAtPosition,
-  getKeySolfeggioMap,
   getPositionId,
   getPositionsInRange,
   getPositionsInKey,
@@ -12,6 +11,7 @@ import type { FretPosition, PracticeKey, SharpNoteName } from '../../types/theor
 import {
   createPracticeItemKey,
   getPracticeItemWeight,
+  type MasteryEntryV1,
   type PracticeMemoryDocumentV1,
 } from './practiceMemory';
 import { ADAPTIVE_PRACTICE_CONFIG } from './adaptivePracticeConfig';
@@ -162,110 +162,178 @@ function resolveQuestionType(config: MvpPracticeConfig, index: number): MvpQuest
   return config.modeId === 'mixed' ? pickByWeight(config.questionTypeWeights, index) : config.modeId;
 }
 
-function pickTargetNote(
-  key: PracticeKey,
-  index: number,
-  config: MvpPracticeConfig,
-  recentTargetNotes: SharpNoteName[],
-): SharpNoteName {
-  const scaleNotes = getKeySolfeggioMap(key).map((item) => item.noteName);
-  const candidates = scaleNotes.filter((noteName) => (
-    getPositionsForNote(config, noteName).length > 0
-      && !recentTargetNotes.includes(noteName)
-  ));
-  const source = candidates.length > 0 ? candidates : scaleNotes.filter((noteName) => getPositionsForNote(config, noteName).length > 0);
-
-  return source[(index * 5 + 2) % source.length];
-}
-
 function getNoteToPositionWeight(
   memory: PracticeMemoryDocumentV1 | undefined,
   key: PracticeKey,
   position: FretPosition,
 ): number {
+  const schedulerConfig = ADAPTIVE_PRACTICE_CONFIG.noteToPositionScheduler.staticWeight;
+  const entry = getNoteToPositionEntry(memory, key, position);
+  const weaknessScore = entry?.weaknessScore ?? 0;
+  const weaknessBonus = Math.min(weaknessScore, schedulerConfig.maxWeaknessBonus);
+
+  return Math.min(
+    schedulerConfig.baseWeight + weaknessBonus,
+    schedulerConfig.maxFinalWeight,
+  );
+}
+
+function getNoteToPositionEntry(
+  memory: PracticeMemoryDocumentV1 | undefined,
+  key: PracticeKey,
+  position: FretPosition,
+): MasteryEntryV1 | undefined {
   if (memory === undefined) {
-    return 1;
+    return undefined;
   }
 
   const noteName = getNoteAtPosition(position);
   const solfeggio = getSolfeggioInKey(noteName, key);
 
-  if (solfeggio === null) {
-    return 1;
-  }
-
-  return getPracticeItemWeight(
-    memory,
-    createPracticeItemKey('note-to-position', key, noteName, solfeggio, position),
-  );
+  return solfeggio === null
+    ? undefined
+    : memory.masteryMap[createPracticeItemKey('note-to-position', key, noteName, solfeggio, position)];
 }
 
-interface WeakTargetNoteCandidate {
+interface NoteToPositionCandidate {
   noteName: SharpNoteName;
-  focusPosition: FretPosition;
+  position: FretPosition;
   weight: number;
 }
 
-function pickWeakTargetNote(
-  config: MvpPracticeConfig,
-  index: number,
-  recentTargetNotes: SharpNoteName[],
-  memory?: PracticeMemoryDocumentV1,
-): WeakTargetNoteCandidate | null {
-  const shouldKeepBroadCoverage = index % ADAPTIVE_PRACTICE_CONFIG.noteToPositionTargeting.weakFocusCycleSize
-    === ADAPTIVE_PRACTICE_CONFIG.noteToPositionTargeting.broadCoverageRemainder;
+interface NoteToPositionSchedulerState {
+  dynamicWeightByPositionId: Record<string, number>;
+}
 
-  if (memory === undefined || Object.keys(memory.masteryMap).length === 0 || shouldKeepBroadCoverage) {
-    return null;
+function createNoteToPositionSchedulerState(): NoteToPositionSchedulerState {
+  return {
+    dynamicWeightByPositionId: {},
+  };
+}
+
+function hashText(text: string): number {
+  let hash = 2166136261;
+
+  for (let index = 0; index < text.length; index += 1) {
+    hash ^= text.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
   }
 
+  return hash >>> 0;
+}
+
+function getDeterministicUnit(seed: string): number {
+  return hashText(seed) / 0xffffffff;
+}
+
+function getCandidatePositions(config: MvpPracticeConfig): FretPosition[] {
   const [minFret, maxFret] = config.fretRange;
   const [minString, maxString] = config.stringRange;
-  const weakPositions = getPositionsInKey(
+
+  return getPositionsInKey(
     config.key,
     { min: minFret, max: maxFret },
     { min: minString as 1, max: maxString as 6 },
-  ).filter((position) => getNoteToPositionWeight(memory, config.key, position) > 1);
+  );
+}
 
-  if (weakPositions.length === 0) {
-    return null;
-  }
+function pickScheduledNoteToPositionTarget(
+  config: MvpPracticeConfig,
+  index: number,
+  state: NoteToPositionSchedulerState,
+  memory?: PracticeMemoryDocumentV1,
+): NoteToPositionCandidate {
+  const candidates = getCandidatePositions(config).map((position) => {
+    const positionId = getPositionId(position);
+    const staticWeight = getNoteToPositionWeight(memory, config.key, position);
+    const dynamicWeight = state.dynamicWeightByPositionId[positionId] ?? 0;
 
-  const candidateMap = new Map<SharpNoteName, WeakTargetNoteCandidate>();
-
-  for (const position of weakPositions) {
-    const noteName = getNoteAtPosition(position);
-    const weight = getNoteToPositionWeight(memory, config.key, position);
-    const current = candidateMap.get(noteName);
-
-    candidateMap.set(noteName, {
-      noteName,
-      focusPosition: current === undefined || weight > getNoteToPositionWeight(memory, config.key, current.focusPosition)
-        ? position
-        : current.focusPosition,
-      weight: (current?.weight ?? 0) + weight,
-    });
-  }
-
-  const candidates = Array.from(candidateMap.values()).filter((candidate) => (
-    !recentTargetNotes.includes(candidate.noteName)
-  ));
-
-  if (candidates.length === 0) {
-    return null;
-  }
+    return {
+      noteName: getNoteAtPosition(position),
+      position,
+      weight: staticWeight + dynamicWeight,
+    };
+  });
 
   return pickByDeterministicWeight(candidates, (candidate) => candidate.weight, index, 53);
 }
 
-function getAssistedPositionsForWeakNote(
+function updateNoteToPositionDynamicWeights(
+  config: MvpPracticeConfig,
+  targetNoteName: SharpNoteName,
+  state: NoteToPositionSchedulerState,
+): void {
+  const dynamicConfig = ADAPTIVE_PRACTICE_CONFIG.noteToPositionScheduler.dynamicWeight;
+
+  for (const position of getCandidatePositions(config)) {
+    const positionId = getPositionId(position);
+
+    if (getNoteAtPosition(position) === targetNoteName) {
+      state.dynamicWeightByPositionId[positionId] = 0;
+      continue;
+    }
+
+    state.dynamicWeightByPositionId[positionId] = Math.min(
+      (state.dynamicWeightByPositionId[positionId] ?? 0) + dynamicConfig.gainPerQuestion,
+      dynamicConfig.maxBonus,
+    );
+  }
+}
+
+function isMasteredNoteToPositionEntry(entry: MasteryEntryV1 | undefined): entry is MasteryEntryV1 {
+  return entry !== undefined
+    && entry.weaknessScore <= 0
+    && entry.fastCorrectStreak >= 2;
+}
+
+function getMasteredRetestRate(entry: MasteryEntryV1): number {
+  const retestConfig = ADAPTIVE_PRACTICE_CONFIG.noteToPositionScheduler.masteredRetest;
+  const confidencePressure = Math.max(
+    0,
+    (retestConfig.lowConfidenceAttemptCount - entry.attempts) / retestConfig.lowConfidenceAttemptCount,
+  );
+  const streakRelief = Math.min(entry.fastCorrectStreak / retestConfig.fastStreakTarget, 1);
+  const instabilityPressure = Math.min(
+    1,
+    (entry.wrongCount + entry.slowCount + Math.max(entry.weaknessScore, 0)) / 4,
+  );
+  const pressure = Math.min(
+    1,
+    confidencePressure * 0.45
+      + (1 - streakRelief) * 0.35
+      + instabilityPressure * 0.2,
+  );
+
+  return retestConfig.minRate
+    + (retestConfig.maxRate - retestConfig.minRate) * pressure;
+}
+
+function shouldRetestMasteredPosition(
+  entry: MasteryEntryV1,
+  questionSeed: string,
+  position: FretPosition,
+): boolean {
+  return getDeterministicUnit(`${questionSeed}|${getPositionId(position)}`) < getMasteredRetestRate(entry);
+}
+
+function getAssistedPositionsForScheduledNote(
   config: MvpPracticeConfig,
   targetPositions: FretPosition[],
+  focusPosition: FretPosition,
+  index: number,
   memory?: PracticeMemoryDocumentV1,
 ): FretPosition[] {
-  return targetPositions.filter((position) => (
-    getNoteToPositionWeight(memory, config.key, position) <= 1
-  ));
+  return targetPositions.filter((position) => {
+    const entry = getNoteToPositionEntry(memory, config.key, position);
+
+    return !isSamePosition(position, focusPosition)
+      && isMasteredNoteToPositionEntry(entry)
+      && !shouldRetestMasteredPosition(
+        entry,
+        `${config.key}|${getNoteAtPosition(focusPosition)}|${index}`,
+        position,
+      );
+  });
 }
 
 function getPositionsForNote(config: MvpPracticeConfig, noteName: SharpNoteName): FretPosition[] {
@@ -282,7 +350,7 @@ export function createQuestion(
   config: MvpPracticeConfig,
   index: number,
   memory?: PracticeMemoryDocumentV1,
-  recentTargetNotes: SharpNoteName[] = [],
+  noteToPositionSchedulerState = createNoteToPositionSchedulerState(),
 ): MvpQuestion {
   const [minFret, maxFret] = config.fretRange;
   const [minString, maxString] = config.stringRange;
@@ -302,25 +370,29 @@ export function createQuestion(
   }
 
   if (type === 'note-to-positions') {
-    const weakTarget = pickWeakTargetNote(config, index, recentTargetNotes, memory);
-    const targetNoteName = weakTarget === null
-      ? pickTargetNote(config.key, index, config, recentTargetNotes)
-      : weakTarget.noteName;
+    const target = pickScheduledNoteToPositionTarget(config, index, noteToPositionSchedulerState, memory);
+    const targetNoteName = target.noteName;
     const targetSolfeggio = getSolfeggioInKey(targetNoteName, config.key);
     const targetPositions = getPositionsForNote(config, targetNoteName);
-    const assistedPositions = weakTarget === null
-      ? undefined
-      : getAssistedPositionsForWeakNote(config, targetPositions, memory);
+    const assistedPositions = getAssistedPositionsForScheduledNote(
+      config,
+      targetPositions,
+      target.position,
+      index,
+      memory,
+    );
 
     if (targetSolfeggio === null || targetPositions.length === 0) {
       throw new Error(`${config.key} 的 ${targetNoteName} 在当前范围内没有可用位置`);
     }
 
+    updateNoteToPositionDynamicWeights(config, targetNoteName, noteToPositionSchedulerState);
+
     return {
       id: `${type}-${config.key}-${targetNoteName}-${index}`,
       type,
       key: config.key,
-      position: weakTarget?.focusPosition ?? targetPositions[0],
+      position: target.position,
       noteName: targetNoteName,
       solfeggio: targetSolfeggio,
       answer: targetPositions,
@@ -330,7 +402,7 @@ export function createQuestion(
       answerKind: 'positions',
       sourceMedium: 'note',
       isFocusNote: config.key === 'G major' && targetNoteName === 'F#',
-      isWeakFocus: weakTarget !== null,
+      isWeakFocus: getNoteToPositionWeight(memory, config.key, target.position) > ADAPTIVE_PRACTICE_CONFIG.noteToPositionScheduler.staticWeight.baseWeight,
     };
   }
 
@@ -355,13 +427,10 @@ export function createQuestion(
 
 export function createQuestionSet(config: MvpPracticeConfig, memory?: PracticeMemoryDocumentV1): MvpQuestion[] {
   const questions: MvpQuestion[] = [];
+  const noteToPositionSchedulerState = createNoteToPositionSchedulerState();
 
   for (let index = 0; index < config.questionCount; index += 1) {
-    const recentTargetNotes = questions
-      .filter((question) => question.type === 'note-to-positions')
-      .slice(-ADAPTIVE_PRACTICE_CONFIG.noteToPositionTargeting.noteCooldownCount)
-      .map((question) => question.noteName);
-    questions.push(createQuestion(config, index, memory, recentTargetNotes));
+    questions.push(createQuestion(config, index, memory, noteToPositionSchedulerState));
   }
 
   return questions;
