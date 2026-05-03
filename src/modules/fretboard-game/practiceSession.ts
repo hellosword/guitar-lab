@@ -1,4 +1,6 @@
 import {
+  getKeySolfeggioMap,
+  getMidiAtPosition,
   getNoteAtPosition,
   getPositionId,
   getPositionsInRange,
@@ -409,27 +411,78 @@ function getNoteToSolfeggioCandidates(
   state: NoteToSolfeggioSchedulerState,
   memory?: PracticeMemoryDocumentV1,
 ): NoteToSolfeggioCandidate[] {
-  const candidateByNoteName = new Map<SharpNoteName, NoteToSolfeggioCandidate>();
+  const octavePositions = getSolfeggioOctavePositions(config);
 
-  for (const position of getCandidatePositions(config)) {
-    const noteName = getNoteAtPosition(position);
-    const solfeggio = getSolfeggioInKey(noteName, config.key);
-
-    if (solfeggio === null || candidateByNoteName.has(noteName)) {
-      continue;
+  return getKeySolfeggioMap(config.key).flatMap(({ noteName, solfeggio }) => {
+    const position = octavePositions.get(noteName);
+    if (position === undefined) {
+      return [];
     }
 
     const staticWeight = getNoteToSolfeggioWeight(memory, config.key, noteName, solfeggio);
     const dynamicWeight = state.dynamicWeightByNoteName[noteName] ?? 0;
-    candidateByNoteName.set(noteName, {
+    return [{
       noteName,
       solfeggio,
       position,
       weight: staticWeight + dynamicWeight,
-    });
+    }];
+  });
+}
+
+/** 音名唱名题使用同一组首调八度，避免各音名被分散到不同八度播放。 */
+function getSolfeggioOctavePositions(config: MvpPracticeConfig): Map<SharpNoteName, FretPosition> {
+  const scaleNotes = getKeySolfeggioMap(config.key).map((item) => item.noteName);
+  const candidatePositions = getCandidatePositions(config);
+  const tonicPositions = candidatePositions
+    .filter((position) => getNoteAtPosition(position) === scaleNotes[0])
+    .sort(compareByPitchThenEasyFret);
+
+  for (const tonicPosition of [...tonicPositions].reverse()) {
+    const octaveStartMidi = getMidiAtPosition(tonicPosition);
+    const positionsByNote = new Map<SharpNoteName, FretPosition>();
+
+    for (const noteName of scaleNotes) {
+      const positionInOctave = candidatePositions
+        .filter((position) => (
+          getNoteAtPosition(position) === noteName
+            && getMidiAtPosition(position) >= octaveStartMidi
+            && getMidiAtPosition(position) < octaveStartMidi + 12
+        ))
+        .sort(compareByPitchThenEasyFret)[0];
+
+      if (positionInOctave === undefined) {
+        break;
+      }
+
+      positionsByNote.set(noteName, positionInOctave);
+    }
+
+    if (positionsByNote.size === scaleNotes.length) {
+      return positionsByNote;
+    }
   }
 
-  return [...candidateByNoteName.values()];
+  const fallbackPositions = new Map<SharpNoteName, FretPosition>();
+  for (const noteName of scaleNotes) {
+    const position = candidatePositions
+      .filter((candidate) => getNoteAtPosition(candidate) === noteName)
+      .sort(compareByPitchThenEasyFret)[0];
+
+    if (position === undefined) {
+      continue;
+    }
+
+    fallbackPositions.set(noteName, position);
+  }
+
+  return fallbackPositions;
+}
+
+function compareByPitchThenEasyFret(a: FretPosition, b: FretPosition): number {
+  return getMidiAtPosition(a) - getMidiAtPosition(b)
+    || a.fret - b.fret
+    || a.string - b.string;
 }
 
 function pickScheduledNoteToSolfeggioTarget(

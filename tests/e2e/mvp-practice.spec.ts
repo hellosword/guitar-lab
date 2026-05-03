@@ -14,11 +14,23 @@ async function partiallyAnswerBPositionQuestion(page: Page): Promise<void> {
   await page.getByRole('button', { name: '下一题' }).click();
 }
 
+async function answerCurrentSolfeggioQuestion(page: Page): Promise<void> {
+  await page.getByRole('button', { name: 'Do', exact: true }).click();
+  const nextButton = page.getByRole('button', { name: '下一题' });
+
+  if (await nextButton.isVisible().catch(() => false)) {
+    await nextButton.click();
+    return;
+  }
+
+  await page.waitForTimeout(700);
+}
+
 test('MVP 练习页可见并能完成一道音名题', async ({ page }) => {
   await page.goto('/');
 
   await expect(page.getByRole('heading', { name: '位置、音名、唱名反应训练' })).toBeVisible();
-  await expect(page.getByText('v0.0.28')).toBeVisible();
+  await expect(page.getByText('v0.0.33')).toBeVisible();
   await expect(page.getByRole('button', { name: 'G 大调' })).toBeVisible();
   await expect(page.getByRole('button', { name: '速查' })).toBeVisible();
   await expect(page.getByRole('button', { name: '综合练习' })).toBeVisible();
@@ -141,7 +153,7 @@ test('练习记忆会按版本写入本地并跨刷新保留', async ({ page }) 
   };
 
   expect(parsedBeforeReload.schemaVersion).toBe(1);
-  expect(parsedBeforeReload.appVersion).toBe('0.0.28');
+  expect(parsedBeforeReload.appVersion).toBe('0.0.33');
   expect(parsedBeforeReload.recentEvents?.length).toBeGreaterThan(0);
   expect(Object.keys(parsedBeforeReload.masteryMap ?? {}).length).toBeGreaterThan(0);
   expect(parsedBeforeReload.recentEvents).toEqual(
@@ -233,6 +245,45 @@ test('音名唱名会记录映射粒度并显示对应弱点地图', async ({ pa
   await expect(page.getByText('Top 5 弱点映射')).toBeVisible();
   await expect(page.getByText('B -> Mi').first()).toBeVisible();
   await expect(page.getByText('音名/唱名：B / Mi')).toBeVisible();
+});
+
+test('音名唱名题使用当前调性的连续首调八度播放音高', async ({ page }) => {
+  const expectedPositions = new Map([
+    ['G', '3 弦 0 品'],
+    ['C', '2 弦 1 品'],
+    ['E', '1 弦 0 品'],
+  ]);
+
+  await page.goto('/');
+  await page.getByRole('button', { name: '音名唱名' }).click();
+
+  for (let step = 0; step < 20 && expectedPositions.size > 0; step += 1) {
+    let matchedCurrentQuestion = false;
+
+    for (const [noteName, expectedPosition] of expectedPositions) {
+      if (!(await page.getByText(noteName, { exact: true }).isVisible().catch(() => false))) {
+        continue;
+      }
+
+      const wrongAnswer = noteName === 'G' ? 'Re' : 'Do';
+      await page.getByRole('button', { name: wrongAnswer, exact: true }).click();
+      await expect(page.getByText(`位置：${expectedPosition}`)).toBeVisible();
+      expectedPositions.delete(noteName);
+
+      if (expectedPositions.size > 0) {
+        await page.getByRole('button', { name: '下一题' }).click();
+      }
+
+      matchedCurrentQuestion = true;
+      break;
+    }
+
+    if (!matchedCurrentQuestion) {
+      await answerCurrentSolfeggioQuestion(page);
+    }
+  }
+
+  expect([...expectedPositions.keys()]).toEqual([]);
 });
 
 test('位置输入类练习会共享位置级自适应记录并显示弱点地图', async ({ page }) => {

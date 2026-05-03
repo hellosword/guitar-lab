@@ -125,3 +125,4 @@
 | 2026-05-03 | v0.0.28 | 位置输入类出题调度校准：移除 G 大调 F# 固定插队，增加位置与音名双层本轮覆盖权重，降低高弱点连发 | `src/modules/fretboard-game/practiceSession.ts`、`src/modules/fretboard-game/adaptivePracticeConfig.ts`、`tests/e2e/mvp-practice.spec.ts` |
 | 2026-05-04 | v0.0.33 | 吉他采样音色切换：加入真实吉他采样资源、音色选择界面与采样播放实现，并同步版本号 | `src/lib/audio.ts`、`src/App.tsx`、`src/appVersion.ts`、`package.json`、`package-lock.json`、`public/audio/samples/guitar/` |
 | 2026-05-04 | 待发布 | 开发期构建标识显示：页面同时展示正式版本号与 Git 分支/短提交号，便于确认刷新后的实际代码来源 | `vite.config.ts`、`src/vite-env.d.ts`、`src/App.tsx` |
+| 2026-05-04 | 待发布 | 音名唱名题播放音高修正：按当前调性选定一组连续首调八度，避免同一练习中音名被播放到不同八度 | `src/modules/fretboard-game/practiceSession.ts` |
