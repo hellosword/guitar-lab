@@ -27,6 +27,7 @@ import {
   isSlowAnswer,
   PRACTICE_MODE_OPTIONS,
 } from './modules/fretboard-game/practiceSession';
+import { PRACTICE_INTERACTION_CONFIG } from './modules/fretboard-game/practiceInteractionConfig';
 import {
   clearPracticeMemory,
   createPositionPracticeItem,
@@ -55,7 +56,6 @@ import type { FretPosition, PracticeKey, SharpNoteName } from './types/theory';
 const KEY_OPTIONS: PracticeKey[] = ['G major', 'C major'];
 const FAST_POSITION_RESPONSE_MS = 2500;
 const MASTERED_FAST_STREAK = 2;
-const POSITION_HUNT_AUTO_ADVANCE_MS = 800;
 type AppView = 'practice' | 'memory';
 type FretboardMarkerMode = 'note' | 'solfeggio';
 
@@ -347,7 +347,7 @@ function App() {
     autoAdvanceTimeoutRef.current = window.setTimeout(() => {
       autoAdvanceTimeoutRef.current = null;
       goToNextQuestion();
-    }, POSITION_HUNT_AUTO_ADVANCE_MS);
+    }, PRACTICE_INTERACTION_CONFIG.positionHuntAutoAdvanceMs);
   }
 
   function handlePositionAnswerClick(position: FretPosition): void {
