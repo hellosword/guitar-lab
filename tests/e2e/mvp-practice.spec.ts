@@ -18,7 +18,7 @@ test('MVP 练习页可见并能完成一道音名题', async ({ page }) => {
   await page.goto('/');
 
   await expect(page.getByRole('heading', { name: '位置、音名、唱名反应训练' })).toBeVisible();
-  await expect(page.getByText('v0.0.10')).toBeVisible();
+  await expect(page.getByText('v0.0.11')).toBeVisible();
   await expect(page.getByRole('button', { name: 'G 大调' })).toBeVisible();
   await expect(page.getByRole('button', { name: '综合练习' })).toBeVisible();
   await expect(page.getByText('第 1 / 20 题')).toBeVisible();
@@ -94,7 +94,7 @@ test('练习记忆会按版本写入本地并跨刷新保留', async ({ page }) 
   };
 
   expect(parsedBeforeReload.schemaVersion).toBe(1);
-  expect(parsedBeforeReload.appVersion).toBe('0.0.10');
+  expect(parsedBeforeReload.appVersion).toBe('0.0.11');
   expect(parsedBeforeReload.recentEvents?.length).toBeGreaterThan(0);
   expect(Object.keys(parsedBeforeReload.masteryMap ?? {}).length).toBeGreaterThan(0);
   expect(parsedBeforeReload.recentEvents).toEqual(
@@ -133,7 +133,7 @@ test('弱点地图可以随时查看音名定位弱点', async ({ page }) => {
 test('音名定位会从弱位置反推音名并提示同音名非弱位置', async ({ page }) => {
   const memory = {
     schemaVersion: 1,
-    appVersion: '0.0.10',
+    appVersion: '0.0.11',
     createdAt: '2026-05-03T00:00:00.000Z',
     updatedAt: '2026-05-03T00:00:00.000Z',
     profile: { id: 'test-profile' },
@@ -188,21 +188,164 @@ test('音名定位会从弱位置反推音名并提示同音名非弱位置', as
   await expect(page.locator('g[aria-label="播放 5 弦 2 品"] text')).toHaveText('✓');
 });
 
-test('音名定位会把本轮已掌握位置预标成音名提示', async ({ page }) => {
+test('音名定位弱点强化会避开最近出现过的音名', async ({ page }) => {
+  const memory = {
+    schemaVersion: 1,
+    appVersion: '0.0.11',
+    createdAt: '2026-05-03T00:00:00.000Z',
+    updatedAt: '2026-05-03T00:00:00.000Z',
+    profile: { id: 'test-profile' },
+    configSnapshot: {
+      schemaVersion: 1,
+      recentWindowSize: 50,
+      minSamplesForRelativeSlow: 10,
+      slowPercentile: 0.7,
+      slowMedianMultiplier: 1.35,
+      maxValidResponseMs: 60000,
+    },
+    masteryMap: {
+      'note-to-position|G major|E|La|4-2': {
+        itemKey: 'note-to-position|G major|E|La|4-2',
+        mappingKind: 'note-to-position',
+        key: 'G major',
+        noteName: 'E',
+        solfeggio: 'La',
+        positionId: '4-2',
+        attempts: 1,
+        correctCount: 0,
+        wrongCount: 1,
+        slowCount: 0,
+        ignoredCount: 0,
+        averageMs: 4200,
+        lastMs: 4200,
+        recentResponseMs: [4200],
+        lastSeenAt: '2026-05-03T00:00:00.000Z',
+        weaknessScore: 3,
+        fastCorrectStreak: 0,
+      },
+      'note-to-position|G major|E|La|6-0': {
+        itemKey: 'note-to-position|G major|E|La|6-0',
+        mappingKind: 'note-to-position',
+        key: 'G major',
+        noteName: 'E',
+        solfeggio: 'La',
+        positionId: '6-0',
+        attempts: 1,
+        correctCount: 0,
+        wrongCount: 1,
+        slowCount: 0,
+        ignoredCount: 0,
+        averageMs: 3600,
+        lastMs: 3600,
+        recentResponseMs: [3600],
+        lastSeenAt: '2026-05-03T00:00:00.000Z',
+        weaknessScore: 3,
+        fastCorrectStreak: 0,
+      },
+    },
+    responseGroups: {},
+    recentEvents: [],
+  };
+
+  await page.addInitScript((storedMemory) => {
+    window.localStorage.setItem('guitarLab.practiceMemory.v1', JSON.stringify(storedMemory));
+  }, memory);
   await page.goto('/');
 
   await page.getByRole('button', { name: '音名定位' }).click();
-  await partiallyAnswerBPositionQuestion(page);
+  await expect(page.getByText('在0-4 品内找出所有 E')).toBeVisible();
 
-  for (let index = 0; index < 6; index += 1) {
-    await clickWrongPositionAndContinue(page);
-  }
+  await page.locator('g[aria-label="播放 1 弦 0 品"]').click();
+  await page.locator('g[aria-label="播放 4 弦 2 品"]').click();
+  await page.locator('g[aria-label="播放 6 弦 0 品"]').click();
 
-  await partiallyAnswerBPositionQuestion(page);
+  await expect(page.getByText('在0-4 品内找出所有 E')).toHaveCount(0);
+});
 
-  for (let index = 0; index < 6; index += 1) {
-    await clickWrongPositionAndContinue(page);
-  }
+test('音名定位会把已熟练位置预标成音名提示', async ({ page }) => {
+  const memory = {
+    schemaVersion: 1,
+    appVersion: '0.0.11',
+    createdAt: '2026-05-03T00:00:00.000Z',
+    updatedAt: '2026-05-03T00:00:00.000Z',
+    profile: { id: 'test-profile' },
+    configSnapshot: {
+      schemaVersion: 1,
+      recentWindowSize: 50,
+      minSamplesForRelativeSlow: 10,
+      slowPercentile: 0.7,
+      slowMedianMultiplier: 1.35,
+      maxValidResponseMs: 60000,
+    },
+    masteryMap: {
+      'note-to-position|G major|B|Mi|2-0': {
+        itemKey: 'note-to-position|G major|B|Mi|2-0',
+        mappingKind: 'note-to-position',
+        key: 'G major',
+        noteName: 'B',
+        solfeggio: 'Mi',
+        positionId: '2-0',
+        attempts: 2,
+        correctCount: 2,
+        wrongCount: 0,
+        slowCount: 0,
+        ignoredCount: 0,
+        averageMs: 900,
+        lastMs: 850,
+        recentResponseMs: [950, 850],
+        lastSeenAt: '2026-05-03T00:00:00.000Z',
+        weaknessScore: 0,
+        fastCorrectStreak: 2,
+      },
+      'note-to-position|G major|B|Mi|5-2': {
+        itemKey: 'note-to-position|G major|B|Mi|5-2',
+        mappingKind: 'note-to-position',
+        key: 'G major',
+        noteName: 'B',
+        solfeggio: 'Mi',
+        positionId: '5-2',
+        attempts: 2,
+        correctCount: 2,
+        wrongCount: 0,
+        slowCount: 0,
+        ignoredCount: 0,
+        averageMs: 1100,
+        lastMs: 1000,
+        recentResponseMs: [1200, 1000],
+        lastSeenAt: '2026-05-03T00:00:00.000Z',
+        weaknessScore: 0,
+        fastCorrectStreak: 2,
+      },
+      'note-to-position|G major|B|Mi|3-4': {
+        itemKey: 'note-to-position|G major|B|Mi|3-4',
+        mappingKind: 'note-to-position',
+        key: 'G major',
+        noteName: 'B',
+        solfeggio: 'Mi',
+        positionId: '3-4',
+        attempts: 1,
+        correctCount: 0,
+        wrongCount: 1,
+        slowCount: 0,
+        ignoredCount: 0,
+        averageMs: 3600,
+        lastMs: 3600,
+        recentResponseMs: [3600],
+        lastSeenAt: '2026-05-03T00:00:00.000Z',
+        weaknessScore: 3,
+        fastCorrectStreak: 0,
+      },
+    },
+    responseGroups: {},
+    recentEvents: [],
+  };
+
+  await page.addInitScript((storedMemory) => {
+    window.localStorage.setItem('guitarLab.practiceMemory.v1', JSON.stringify(storedMemory));
+  }, memory);
+  await page.goto('/');
+
+  await page.getByRole('button', { name: '音名定位' }).click();
 
   await expect(page.getByText('已找到 0 / 1')).toBeVisible();
   await expect(page.getByText('已提示的 2 个位置已用音名圆点标出。')).toBeVisible();

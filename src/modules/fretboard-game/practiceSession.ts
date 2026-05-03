@@ -166,36 +166,16 @@ function pickTargetNote(
   key: PracticeKey,
   index: number,
   config: MvpPracticeConfig,
-  memory?: PracticeMemoryDocumentV1,
+  recentTargetNotes: SharpNoteName[],
 ): SharpNoteName {
   const scaleNotes = getKeySolfeggioMap(key).map((item) => item.noteName);
+  const candidates = scaleNotes.filter((noteName) => (
+    getPositionsForNote(config, noteName).length > 0
+      && !recentTargetNotes.includes(noteName)
+  ));
+  const source = candidates.length > 0 ? candidates : scaleNotes.filter((noteName) => getPositionsForNote(config, noteName).length > 0);
 
-  if (memory === undefined || Object.keys(memory.masteryMap).length === 0) {
-    return scaleNotes[(index * 5 + 2) % scaleNotes.length];
-  }
-
-  return pickByDeterministicWeight(
-    scaleNotes,
-    (noteName) => {
-      const solfeggio = getSolfeggioInKey(noteName, key);
-      const notePositions = getPositionsForNote(config, noteName);
-
-      if (solfeggio === null || notePositions.length === 0) {
-        return 1;
-      }
-
-      const totalWeight = notePositions.reduce((sum, position) => (
-        sum + getPracticeItemWeight(
-          memory,
-          createPracticeItemKey('note-to-position', key, noteName, solfeggio, position),
-        )
-      ), 0);
-
-      return Math.max(1, totalWeight / notePositions.length);
-    },
-    index,
-    41,
-  );
+  return source[(index * 5 + 2) % source.length];
 }
 
 function getNoteToPositionWeight(
@@ -220,11 +200,18 @@ function getNoteToPositionWeight(
   );
 }
 
-function pickWeakTargetPosition(
+interface WeakTargetNoteCandidate {
+  noteName: SharpNoteName;
+  focusPosition: FretPosition;
+  weight: number;
+}
+
+function pickWeakTargetNote(
   config: MvpPracticeConfig,
   index: number,
+  recentTargetNotes: SharpNoteName[],
   memory?: PracticeMemoryDocumentV1,
-): FretPosition | null {
+): WeakTargetNoteCandidate | null {
   const shouldKeepBroadCoverage = index % ADAPTIVE_PRACTICE_CONFIG.noteToPositionTargeting.weakFocusCycleSize
     === ADAPTIVE_PRACTICE_CONFIG.noteToPositionTargeting.broadCoverageRemainder;
 
@@ -244,12 +231,31 @@ function pickWeakTargetPosition(
     return null;
   }
 
-  return pickByDeterministicWeight(
-    weakPositions,
-    (position) => getNoteToPositionWeight(memory, config.key, position),
-    index,
-    53,
-  );
+  const candidateMap = new Map<SharpNoteName, WeakTargetNoteCandidate>();
+
+  for (const position of weakPositions) {
+    const noteName = getNoteAtPosition(position);
+    const weight = getNoteToPositionWeight(memory, config.key, position);
+    const current = candidateMap.get(noteName);
+
+    candidateMap.set(noteName, {
+      noteName,
+      focusPosition: current === undefined || weight > getNoteToPositionWeight(memory, config.key, current.focusPosition)
+        ? position
+        : current.focusPosition,
+      weight: (current?.weight ?? 0) + weight,
+    });
+  }
+
+  const candidates = Array.from(candidateMap.values()).filter((candidate) => (
+    !recentTargetNotes.includes(candidate.noteName)
+  ));
+
+  if (candidates.length === 0) {
+    return null;
+  }
+
+  return pickByDeterministicWeight(candidates, (candidate) => candidate.weight, index, 53);
 }
 
 function getAssistedPositionsForWeakNote(
@@ -272,7 +278,12 @@ function getPositionsForNote(config: MvpPracticeConfig, noteName: SharpNoteName)
   ).filter((position) => getNoteAtPosition(position) === noteName);
 }
 
-export function createQuestion(config: MvpPracticeConfig, index: number, memory?: PracticeMemoryDocumentV1): MvpQuestion {
+export function createQuestion(
+  config: MvpPracticeConfig,
+  index: number,
+  memory?: PracticeMemoryDocumentV1,
+  recentTargetNotes: SharpNoteName[] = [],
+): MvpQuestion {
   const [minFret, maxFret] = config.fretRange;
   const [minString, maxString] = config.stringRange;
   const positions = getPositionsInKey(
@@ -291,13 +302,13 @@ export function createQuestion(config: MvpPracticeConfig, index: number, memory?
   }
 
   if (type === 'note-to-positions') {
-    const weakTargetPosition = pickWeakTargetPosition(config, index, memory);
-    const targetNoteName = weakTargetPosition === null
-      ? pickTargetNote(config.key, index, config, memory)
-      : getNoteAtPosition(weakTargetPosition);
+    const weakTarget = pickWeakTargetNote(config, index, recentTargetNotes, memory);
+    const targetNoteName = weakTarget === null
+      ? pickTargetNote(config.key, index, config, recentTargetNotes)
+      : weakTarget.noteName;
     const targetSolfeggio = getSolfeggioInKey(targetNoteName, config.key);
     const targetPositions = getPositionsForNote(config, targetNoteName);
-    const assistedPositions = weakTargetPosition === null
+    const assistedPositions = weakTarget === null
       ? undefined
       : getAssistedPositionsForWeakNote(config, targetPositions, memory);
 
@@ -309,7 +320,7 @@ export function createQuestion(config: MvpPracticeConfig, index: number, memory?
       id: `${type}-${config.key}-${targetNoteName}-${index}`,
       type,
       key: config.key,
-      position: weakTargetPosition ?? targetPositions[0],
+      position: weakTarget?.focusPosition ?? targetPositions[0],
       noteName: targetNoteName,
       solfeggio: targetSolfeggio,
       answer: targetPositions,
@@ -319,7 +330,7 @@ export function createQuestion(config: MvpPracticeConfig, index: number, memory?
       answerKind: 'positions',
       sourceMedium: 'note',
       isFocusNote: config.key === 'G major' && targetNoteName === 'F#',
-      isWeakFocus: weakTargetPosition !== null,
+      isWeakFocus: weakTarget !== null,
     };
   }
 
@@ -343,7 +354,17 @@ export function createQuestion(config: MvpPracticeConfig, index: number, memory?
 }
 
 export function createQuestionSet(config: MvpPracticeConfig, memory?: PracticeMemoryDocumentV1): MvpQuestion[] {
-  return Array.from({ length: config.questionCount }, (_, index) => createQuestion(config, index, memory));
+  const questions: MvpQuestion[] = [];
+
+  for (let index = 0; index < config.questionCount; index += 1) {
+    const recentTargetNotes = questions
+      .filter((question) => question.type === 'note-to-positions')
+      .slice(-ADAPTIVE_PRACTICE_CONFIG.noteToPositionTargeting.noteCooldownCount)
+      .map((question) => question.noteName);
+    questions.push(createQuestion(config, index, memory, recentTargetNotes));
+  }
+
+  return questions;
 }
 
 export function isSlowAnswer(question: MvpQuestion, responseMs: number): boolean {

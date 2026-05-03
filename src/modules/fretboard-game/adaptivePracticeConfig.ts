@@ -22,13 +22,19 @@ export const ADAPTIVE_PRACTICE_CONFIG = {
   /**
    * 音名定位题的弱位置强化节奏。
    *
-   * 目前策略是“多数题从弱位置反推音名，少数题保留普通覆盖”。
-   * 例如 cycleSize=5、broadCoverageRemainder=4 表示：
-   * index % 5 === 4 的题不强行选择弱位置，用来保持普通覆盖面。
+   * 策略：
+   * - 先把弱位置汇总到题面音名，再从音名层面出题，避免多个 E 弱位置连续生成多道 E 题。
+   * - 保留普通覆盖题，让练习不退化成“只刷弱点”。
+   * - 最近出现过的音名进入短冷却期，优先换一个音名。
+   *
+   * 当前 cycleSize=2、broadCoverageRemainder=1 表示：
+   * - index % 2 === 0：尝试弱位置强化。
+   * - index % 2 === 1：普通覆盖。
    */
   noteToPositionTargeting: {
-    weakFocusCycleSize: 5,
-    broadCoverageRemainder: 4,
+    weakFocusCycleSize: 2,
+    broadCoverageRemainder: 1,
+    noteCooldownCount: 2,
   },
 } as const;
 

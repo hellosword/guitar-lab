@@ -246,7 +246,7 @@ function resolveWeaknessStatus(entry: MasteryEntryV1): WeaknessStatus {
 }
 
 function toWeaknessMapEntry(entry: MasteryEntryV1): WeaknessMapEntry | null {
-  if (entry.mappingKind !== 'note-to-position' || entry.noteName === undefined || entry.solfeggio === undefined) {
+  if (entry.mappingKind !== 'note-to-position' || entry.noteName === undefined) {
     return null;
   }
 
@@ -259,7 +259,7 @@ function toWeaknessMapEntry(entry: MasteryEntryV1): WeaknessMapEntry | null {
   return {
     itemKey: entry.itemKey,
     noteName: entry.noteName,
-    solfeggio: entry.solfeggio,
+    solfeggio: isNoteInKey(entry.noteName, entry.key) ? entry.solfeggio ?? '未知' : '调外音',
     position,
     attempts: entry.attempts,
     correctCount: entry.correctCount,

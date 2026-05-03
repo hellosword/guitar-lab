@@ -275,7 +275,7 @@ export function createPositionPracticeItem(
   outcomeOnFailure: Extract<PracticeOutcome, 'missed-position' | 'extra-position'>,
 ): PracticeMemoryItem {
   const noteName = getNoteAtPosition(position);
-  const solfeggio = getSolfeggioInKey(noteName, question.key) ?? question.solfeggio;
+  const solfeggio = getSolfeggioInKey(noteName, question.key) ?? undefined;
   const mappingKind: MappingKind = 'note-to-position';
 
   return {
