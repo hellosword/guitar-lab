@@ -367,6 +367,7 @@ function App() {
 
     if (getMissingPositions(positionsToClick, nextSelectedPositions).length === 0) {
       completeAnswer([...masteredAnswerPositions, ...nextSelectedPositions]);
+      goToNextQuestion();
     }
   }
 
@@ -854,7 +855,7 @@ function PositionHuntPanel({ foundCount, targetCount, masteredCount, isComplete 
         </p>
       )}
       <p className="mt-2 text-sm leading-6 text-slate-500">
-        {isComplete ? '本题已结束，观察反馈后进入下一题。' : '点对会立刻标记，点错会结束本题并揭示答案。'}
+        {isComplete ? '本题已结束，观察反馈后进入下一题。' : '点对会立刻标记，全对后自动进入下一题；点错会结束本题并揭示答案。'}
       </p>
     </div>
   );

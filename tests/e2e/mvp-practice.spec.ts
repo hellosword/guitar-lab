@@ -18,7 +18,7 @@ test('MVP 练习页可见并能完成一道音名题', async ({ page }) => {
   await page.goto('/');
 
   await expect(page.getByRole('heading', { name: '位置、音名、唱名反应训练' })).toBeVisible();
-  await expect(page.getByText('v0.0.5')).toBeVisible();
+  await expect(page.getByText('v0.0.6')).toBeVisible();
   await expect(page.getByRole('button', { name: 'G 大调' })).toBeVisible();
   await expect(page.getByRole('button', { name: '综合练习' })).toBeVisible();
   await expect(page.getByText('第 1 / 20 题')).toBeVisible();
@@ -37,7 +37,7 @@ test('MVP 练习页可见并能完成一道音名题', async ({ page }) => {
   await expect(page.getByRole('button', { name: '下一题' })).toBeVisible();
 });
 
-test('音名定位题点对会即时标记并在全对后结束', async ({ page }) => {
+test('音名定位题点对会即时标记并在全对后自动进入下一题', async ({ page }) => {
   await page.goto('/');
 
   await page.getByRole('button', { name: '音名定位' }).click();
@@ -56,9 +56,9 @@ test('音名定位题点对会即时标记并在全对后结束', async ({ page 
   await page.locator('g[aria-label="播放 3 弦 4 品"]').click();
   await page.locator('g[aria-label="播放 5 弦 2 品"]').click();
 
-  await expect(page.getByText('答对了')).toBeVisible();
-  await expect(page.getByText('正确答案：2 弦 0 品、3 弦 4 品、5 弦 2 品')).toBeVisible();
-  await expect(page.getByRole('button', { name: '下一题' })).toBeVisible();
+  await expect(page.getByText('第 2 / 20 题')).toBeVisible();
+  await expect(page.getByText('答对了')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '下一题' })).toHaveCount(0);
 });
 
 test('音名定位题点错会立即结束并保留下一题按钮', async ({ page }) => {
@@ -93,7 +93,7 @@ test('练习记忆会按版本写入本地并跨刷新保留', async ({ page }) 
   };
 
   expect(parsedBeforeReload.schemaVersion).toBe(1);
-  expect(parsedBeforeReload.appVersion).toBe('0.0.5');
+  expect(parsedBeforeReload.appVersion).toBe('0.0.6');
   expect(parsedBeforeReload.recentEvents?.length).toBeGreaterThan(0);
   expect(Object.keys(parsedBeforeReload.masteryMap ?? {}).length).toBeGreaterThan(0);
   expect(parsedBeforeReload.recentEvents).toEqual(
@@ -133,8 +133,8 @@ test('音名定位会把本轮已掌握位置预标成音名提示', async ({ pa
   await expect(page.locator('g[aria-label="播放 5 弦 2 品"] text')).toHaveText('B');
 
   await page.locator('g[aria-label="播放 3 弦 4 品"]').click();
-  await expect(page.getByText('答对了')).toBeVisible();
-  await expect(page.getByRole('button', { name: '下一题' })).toBeVisible();
+  await expect(page.getByText('答对了')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '下一题' })).toHaveCount(0);
 });
 
 test('练习模式切换会立即重开对应题型并保留到调性切换', async ({ page }) => {
