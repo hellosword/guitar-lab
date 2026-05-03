@@ -25,6 +25,15 @@
   - 优先覆盖当前核心目标：开放把位（C 大调 0-3 品、G 大调 0-4 品）的“指板位置 → 音名 → 首调唱名”
 - **预期产出**：可感知进步的个人化练习闭环
 
+### 开发：音名定位调度器 V2
+- **来源**：本次对话（2026-05-03），基于 v0.0.11 音名定位重复弱题的体感反馈
+- **内容**：用“位置静态权重 + 本轮动态权重”替换当前音名定位的硬节奏调度
+  - 按位置综合权重抽样，再反推题面音名
+  - 同音名下弱位置、未知位置必考
+  - 熟练位置按掌握稳定度计算复查概率，未复查时直接提示
+  - 生成某音名题后清空同音名位置的动态权重，避免连续刷同一音名
+- **预期产出**：`v0.0.12` 音名定位调度器实现
+
 ### 产品：指板音名记忆玩法定义文档
 - **来源**：本次对话（2026-04-26），`docs/product/guitar-fretboard-game-design.md` 第 10 节后续待办
 - **内容**：在三维参数体系（Key → PlayMode → Range）框架下，定义指板音名记忆（P ↔ N）玩法的完整规则
@@ -147,3 +156,4 @@
 | 2026-05-03 | v0.0.9 | 随时可打开的弱点地图：指板热度、Top 5 弱点、调外误触与位置详情 | `src/App.tsx`、`tests/e2e/mvp-practice.spec.ts` |
 | 2026-05-03 | v0.0.10 | 音名定位按弱位置加权出题：从弱位置反推音名，并提示同音名非弱位置 | `src/modules/fretboard-game/practiceSession.ts`、`src/App.tsx`、`tests/e2e/mvp-practice.spec.ts` |
 | 2026-05-03 | v0.0.11 | 音名定位出题调度校准：弱题比例降至 50%、普通覆盖去弱点权重、音名冷却与调外误触唱名修正 | `src/modules/fretboard-game/practiceSession.ts`、`src/modules/fretboard-game/adaptivePracticeConfig.ts`、`src/modules/fretboard-game/practiceMemory.ts`、`tests/e2e/mvp-practice.spec.ts` |
+| 2026-05-03 | 文档期 | 音名定位调度器 V2 产品规格：位置静态权重 + 本轮动态权重 + 熟练位置动态复查 | `docs/product/note-to-position-scheduler-v2-spec.md` |
