@@ -19,6 +19,23 @@ export const ADAPTIVE_PRACTICE_CONFIG = {
     maxWeaknessBonus: 3,
     maxFinalWeight: 4,
   },
+  positionInputScheduler: {
+    staticWeight: {
+      baseWeight: 1,
+      maxWeaknessBonus: 3,
+      maxFinalWeight: 4,
+    },
+    dynamicWeight: {
+      gainPerQuestion: 1,
+      maxBonus: 4,
+      resetScope: 'exact-position',
+    },
+    noteDynamicWeight: {
+      gainPerQuestion: 3,
+      maxBonus: 4,
+      immediateRepeatMultiplier: 0.2,
+    },
+  },
   /**
    * 音名定位调度器 V2。
    *

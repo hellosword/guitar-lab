@@ -10,7 +10,7 @@ import {
 import type { FretPosition, PracticeKey, SharpNoteName, Solfeggio } from '../../types/theory';
 import {
   createPracticeItemKey,
-  getPracticeItemWeight,
+  type MappingKind,
   type MasteryEntryV1,
   type PracticeMemoryDocumentV1,
 } from './practiceMemory';
@@ -85,10 +85,8 @@ function pickByWeight(weights: Record<MvpQuestionType, number>, index: number): 
   return entries[0][0];
 }
 
-function pickPosition(positions: FretPosition[], index: number, focusPositions: FretPosition[]): FretPosition {
-  const shouldUseFocus = focusPositions.length > 0 && index % 5 === 2;
-  const source = shouldUseFocus ? focusPositions : positions;
-  return source[(index * 11 + 3) % source.length];
+function pickPosition(positions: FretPosition[], index: number): FretPosition {
+  return positions[(index * 11 + 3) % positions.length];
 }
 
 function pickByDeterministicWeight<T>(
@@ -111,50 +109,65 @@ function pickByDeterministicWeight<T>(
   return items[0];
 }
 
-function getPositionWeight(
-  memory: PracticeMemoryDocumentV1 | undefined,
+function getPositionInputMappingKind(type: MvpQuestionType): Extract<MappingKind, 'position-to-note' | 'position-to-solfeggio'> | null {
+  if (type === 'board-to-note' || type === 'tab-to-note') {
+    return 'position-to-note';
+  }
+
+  if (type === 'board-to-solfeggio' || type === 'tab-to-solfeggio') {
+    return 'position-to-solfeggio';
+  }
+
+  return null;
+}
+
+function getPositionInputItemKey(
   key: PracticeKey,
   type: MvpQuestionType,
   position: FretPosition,
-): number {
-  if (memory === undefined) {
-    return 1;
+): string | null {
+  const mappingKind = getPositionInputMappingKind(type);
+
+  if (mappingKind === null) {
+    return null;
   }
 
   const noteName = getNoteAtPosition(position);
   const solfeggio = getSolfeggioInKey(noteName, key);
 
-  if (solfeggio === null) {
-    return 1;
-  }
-
-  const mappingKind = type.endsWith('note') ? 'position-to-note' : 'position-to-solfeggio';
-  return getPracticeItemWeight(
-    memory,
-    createPracticeItemKey(mappingKind, key, noteName, solfeggio, position),
-  );
+  return solfeggio === null ? null : createPracticeItemKey(mappingKind, key, noteName, solfeggio, position);
 }
 
-function pickWeightedPosition(
-  positions: FretPosition[],
-  index: number,
-  focusPositions: FretPosition[],
-  config: MvpPracticeConfig,
+function getPositionInputMappingKey(key: PracticeKey, type: MvpQuestionType): string | null {
+  const mappingKind = getPositionInputMappingKind(type);
+  return mappingKind === null ? null : `${mappingKind}|${key}`;
+}
+
+function getPositionInputNoteKey(key: PracticeKey, type: MvpQuestionType, noteName: SharpNoteName): string | null {
+  const mappingKey = getPositionInputMappingKey(key, type);
+  return mappingKey === null ? null : `${mappingKey}|${noteName}`;
+}
+
+function getPositionInputWeight(
+  memory: PracticeMemoryDocumentV1 | undefined,
+  key: PracticeKey,
   type: MvpQuestionType,
-  memory?: PracticeMemoryDocumentV1,
-): FretPosition {
-  if (memory === undefined || Object.keys(memory.masteryMap).length === 0) {
-    return pickPosition(positions, index, focusPositions);
+  position: FretPosition,
+): number {
+  const schedulerConfig = ADAPTIVE_PRACTICE_CONFIG.positionInputScheduler.staticWeight;
+  const itemKey = getPositionInputItemKey(key, type, position);
+
+  if (memory === undefined || itemKey === null) {
+    return schedulerConfig.baseWeight;
   }
 
-  const shouldUseFocus = focusPositions.length > 0 && index % 5 === 2;
-  const source = shouldUseFocus ? focusPositions : positions;
+  const entry = memory.masteryMap[itemKey];
+  const weaknessScore = entry?.weaknessScore ?? 0;
+  const weaknessBonus = Math.min(weaknessScore, schedulerConfig.maxWeaknessBonus);
 
-  return pickByDeterministicWeight(
-    source,
-    (position) => getPositionWeight(memory, config.key, type, position),
-    index,
-    29,
+  return Math.min(
+    schedulerConfig.baseWeight + weaknessBonus,
+    schedulerConfig.maxFinalWeight,
   );
 }
 
@@ -227,6 +240,25 @@ interface NoteToPositionCandidate {
   weight: number;
 }
 
+interface PositionInputCandidate {
+  position: FretPosition;
+  weight: number;
+}
+
+interface PositionInputSchedulerState {
+  dynamicWeightByItemKey: Record<string, number>;
+  dynamicWeightByNoteKey: Record<string, number>;
+  lastNoteNameByMappingKey: Record<string, SharpNoteName>;
+}
+
+function createPositionInputSchedulerState(): PositionInputSchedulerState {
+  return {
+    dynamicWeightByItemKey: {},
+    dynamicWeightByNoteKey: {},
+    lastNoteNameByMappingKey: {},
+  };
+}
+
 interface NoteToPositionSchedulerState {
   dynamicWeightByPositionId: Record<string, number>;
 }
@@ -278,6 +310,98 @@ function getCandidatePositions(config: MvpPracticeConfig): FretPosition[] {
     { min: minFret, max: maxFret },
     { min: minString as 1, max: maxString as 6 },
   );
+}
+
+function getPositionInputCandidates(
+  config: MvpPracticeConfig,
+  type: MvpQuestionType,
+  state: PositionInputSchedulerState,
+  memory?: PracticeMemoryDocumentV1,
+): PositionInputCandidate[] {
+  return getCandidatePositions(config).map((position) => {
+    const itemKey = getPositionInputItemKey(config.key, type, position);
+    const noteName = getNoteAtPosition(position);
+    const noteKey = getPositionInputNoteKey(config.key, type, noteName);
+    const mappingKey = getPositionInputMappingKey(config.key, type);
+    const staticWeight = getPositionInputWeight(memory, config.key, type, position);
+    const dynamicWeight = itemKey === null ? 0 : state.dynamicWeightByItemKey[itemKey] ?? 0;
+    const noteDynamicWeight = noteKey === null ? 0 : state.dynamicWeightByNoteKey[noteKey] ?? 0;
+    const repeatMultiplier = mappingKey !== null && state.lastNoteNameByMappingKey[mappingKey] === noteName
+      ? ADAPTIVE_PRACTICE_CONFIG.positionInputScheduler.noteDynamicWeight.immediateRepeatMultiplier
+      : 1;
+
+    return {
+      position,
+      weight: (staticWeight + dynamicWeight + noteDynamicWeight) * repeatMultiplier,
+    };
+  });
+}
+
+function pickScheduledPositionInputTarget(
+  config: MvpPracticeConfig,
+  type: MvpQuestionType,
+  index: number,
+  state: PositionInputSchedulerState,
+  memory?: PracticeMemoryDocumentV1,
+): FretPosition {
+  const candidates = getPositionInputCandidates(config, type, state, memory);
+  const baseWeight = ADAPTIVE_PRACTICE_CONFIG.positionInputScheduler.staticWeight.baseWeight;
+  const hasAdaptivePressure = candidates.some((candidate) => candidate.weight !== baseWeight);
+
+  if (!hasAdaptivePressure) {
+    return pickPosition(candidates.map((candidate) => candidate.position), index);
+  }
+
+  return pickByDeterministicWeight(candidates, (candidate) => candidate.weight, index, 29).position;
+}
+
+function updatePositionInputDynamicWeights(
+  config: MvpPracticeConfig,
+  type: MvpQuestionType,
+  targetPosition: FretPosition,
+  state: PositionInputSchedulerState,
+): void {
+  const dynamicConfig = ADAPTIVE_PRACTICE_CONFIG.positionInputScheduler.dynamicWeight;
+  const noteDynamicConfig = ADAPTIVE_PRACTICE_CONFIG.positionInputScheduler.noteDynamicWeight;
+  const targetItemKey = getPositionInputItemKey(config.key, type, targetPosition);
+  const targetNoteName = getNoteAtPosition(targetPosition);
+  const targetNoteKey = getPositionInputNoteKey(config.key, type, targetNoteName);
+  const mappingKey = getPositionInputMappingKey(config.key, type);
+  const handledNoteKeys = new Set<string>();
+
+  for (const position of getCandidatePositions(config)) {
+    const itemKey = getPositionInputItemKey(config.key, type, position);
+    const noteName = getNoteAtPosition(position);
+    const noteKey = getPositionInputNoteKey(config.key, type, noteName);
+
+    if (itemKey === null) {
+      continue;
+    }
+
+    if (noteKey !== null && !handledNoteKeys.has(noteKey)) {
+      handledNoteKeys.add(noteKey);
+      state.dynamicWeightByNoteKey[noteKey] = noteKey === targetNoteKey
+        ? 0
+        : Math.min(
+            (state.dynamicWeightByNoteKey[noteKey] ?? 0) + noteDynamicConfig.gainPerQuestion,
+            noteDynamicConfig.maxBonus,
+          );
+    }
+
+    if (itemKey === targetItemKey) {
+      state.dynamicWeightByItemKey[itemKey] = 0;
+      continue;
+    }
+
+    state.dynamicWeightByItemKey[itemKey] = Math.min(
+      (state.dynamicWeightByItemKey[itemKey] ?? 0) + dynamicConfig.gainPerQuestion,
+      dynamicConfig.maxBonus,
+    );
+  }
+
+  if (mappingKey !== null) {
+    state.lastNoteNameByMappingKey[mappingKey] = targetNoteName;
+  }
 }
 
 function getNoteToSolfeggioCandidates(
@@ -460,6 +584,7 @@ export function createQuestion(
   config: MvpPracticeConfig,
   index: number,
   memory?: PracticeMemoryDocumentV1,
+  positionInputSchedulerState = createPositionInputSchedulerState(),
   noteToPositionSchedulerState = createNoteToPositionSchedulerState(),
   noteToSolfeggioSchedulerState = createNoteToSolfeggioSchedulerState(),
 ): MvpQuestion {
@@ -470,15 +595,7 @@ export function createQuestion(
     { min: minFret, max: maxFret },
     { min: minString as 1, max: maxString as 6 },
   );
-  const focusPositions = positions.filter((position) => isGKeyFocusNote(position, config.key));
   const type = resolveQuestionType(config, index);
-  const position = pickWeightedPosition(positions, index, focusPositions, config, type, memory);
-  const noteName = getNoteAtPosition(position);
-  const solfeggio = getSolfeggioInKey(noteName, config.key);
-
-  if (solfeggio === null) {
-    throw new Error(`位置 ${getPositionId(position)} 不属于 ${config.key}`);
-  }
 
   if (type === 'note-to-positions') {
     const target = pickScheduledNoteToPositionTarget(config, index, noteToPositionSchedulerState, memory);
@@ -517,11 +634,13 @@ export function createQuestion(
     };
   }
 
+  const fallbackPosition = pickPosition(positions, index);
+
   if (type === 'note-to-solfeggio') {
     const target = pickScheduledNoteToSolfeggioTarget(
       config,
       index,
-      position,
+      fallbackPosition,
       noteToSolfeggioSchedulerState,
       memory,
     );
@@ -545,6 +664,16 @@ export function createQuestion(
     };
   }
 
+  const position = pickScheduledPositionInputTarget(config, type, index, positionInputSchedulerState, memory);
+  const noteName = getNoteAtPosition(position);
+  const solfeggio = getSolfeggioInKey(noteName, config.key);
+
+  if (solfeggio === null) {
+    throw new Error(`位置 ${getPositionId(position)} 不属于 ${config.key}`);
+  }
+
+  updatePositionInputDynamicWeights(config, type, position, positionInputSchedulerState);
+
   const answerKind = type.endsWith('note') ? 'note' : 'solfeggio';
   const sourceMedium = type.startsWith('board') ? 'board' : type.startsWith('tab') ? 'tab' : 'note';
 
@@ -566,11 +695,19 @@ export function createQuestion(
 
 export function createQuestionSet(config: MvpPracticeConfig, memory?: PracticeMemoryDocumentV1): MvpQuestion[] {
   const questions: MvpQuestion[] = [];
+  const positionInputSchedulerState = createPositionInputSchedulerState();
   const noteToPositionSchedulerState = createNoteToPositionSchedulerState();
   const noteToSolfeggioSchedulerState = createNoteToSolfeggioSchedulerState();
 
   for (let index = 0; index < config.questionCount; index += 1) {
-    questions.push(createQuestion(config, index, memory, noteToPositionSchedulerState, noteToSolfeggioSchedulerState));
+    questions.push(createQuestion(
+      config,
+      index,
+      memory,
+      positionInputSchedulerState,
+      noteToPositionSchedulerState,
+      noteToSolfeggioSchedulerState,
+    ));
   }
 
   return questions;
