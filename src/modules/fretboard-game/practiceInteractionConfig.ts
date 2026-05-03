@@ -7,20 +7,18 @@
  */
 export const PRACTICE_INTERACTION_CONFIG = {
   /**
-   * 任意题型答对后，自动进入下一题前等待的时间。
+   * 任意题型答对后，自动进入下一题前的最小等待时间。
    *
    * 设计目的：
    * - 让正确反馈有时间被看见。
-   * - 让用户本次点击触发的音高先响出来。
-   * - 避免下一题的自动提示音和本题音高几乎重叠。
+   * - 配合“等待当前音高播放结束”规则，避免下一题提示音和本题音高重叠。
    *
    * 调参建议：
    * - 500ms 以下会显得太急，容易看不到最后反馈。
-   * - 600ms 当前更适合连续刷题，仍能看到短确认反馈。
-   * - 800ms 会更稳，但节奏略慢。
-   * - 1200ms 以上会更稳，但连续刷题节奏会变慢。
+   * - 500ms 当前只作为视觉反馈下限；如果音频仍在播放，会继续等待。
+   * - 800ms 以上会更稳，但连续刷题节奏会变慢。
    */
-  correctAnswerAutoAdvanceMs: 600,
+  correctAnswerAutoAdvanceMs: 500,
 } as const;
 
 export type PracticeInteractionConfig = typeof PRACTICE_INTERACTION_CONFIG;

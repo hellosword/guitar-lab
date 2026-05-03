@@ -23,7 +23,7 @@ async function answerCurrentSolfeggioQuestion(page: Page): Promise<void> {
     return;
   }
 
-  await page.waitForTimeout(700);
+  await expect(page.getByText('答对了')).toHaveCount(0, { timeout: 4_000 });
 }
 
 test('MVP 练习页可见并能完成一道音名题', async ({ page }) => {
@@ -117,6 +117,8 @@ test('音名定位题点对会即时标记并在全对后自动进入下一题',
 
   await expect(page.locator('g[aria-label="播放 5 弦 2 品"] text')).toHaveText('✓');
   await expect(page.getByText('答对了')).toBeVisible();
+  await page.waitForTimeout(700);
+  await expect(page.getByText('第 1 / 20 题')).toBeVisible();
   await expect(page.getByText('第 2 / 20 题')).toBeVisible();
   await expect(page.getByRole('button', { name: '下一题' })).toHaveCount(0);
 });

@@ -10,6 +10,7 @@ export type GuitarToneId = 'clean-electric' | 'emilyguitar';
 
 let audioContext: AudioContext | null = null;
 const sampleCache = new Map<string, Promise<AudioBuffer>>();
+const activePitchPlaybacks = new Set<Promise<void>>();
 
 interface GuitarSampleRegion {
   minMidi: number;
@@ -145,7 +146,7 @@ async function loadSample(context: AudioContext, position: FretPosition, toneId:
   return bufferPromise;
 }
 
-export async function playPositionPitch(position: FretPosition, toneId: GuitarToneId): Promise<void> {
+async function playPositionPitchInternal(position: FretPosition, toneId: GuitarToneId): Promise<void> {
   const context = getAudioContext();
 
   if (context.state === 'suspended') {
@@ -161,6 +162,15 @@ export async function playPositionPitch(position: FretPosition, toneId: GuitarTo
   const highpass = context.createBiquadFilter();
   const filter = context.createBiquadFilter();
   const playbackRate = getSamplePlaybackRate(position, region);
+  const ended = new Promise<void>((resolve) => {
+    source.onended = () => {
+      source.disconnect();
+      highpass.disconnect();
+      filter.disconnect();
+      gain.disconnect();
+      resolve();
+    };
+  });
 
   source.buffer = sampleBuffer;
   source.playbackRate.setValueAtTime(playbackRate, startAt);
@@ -186,12 +196,22 @@ export async function playPositionPitch(position: FretPosition, toneId: GuitarTo
   source.start(startAt);
   source.stop(startAt + Math.min(bank.stopAtSeconds, sampleBuffer.duration / playbackRate));
 
-  source.onended = () => {
-    source.disconnect();
-    highpass.disconnect();
-    filter.disconnect();
-    gain.disconnect();
-  };
+  await ended;
+}
+
+export function playPositionPitch(position: FretPosition, toneId: GuitarToneId): Promise<void> {
+  const playback = playPositionPitchInternal(position, toneId);
+  activePitchPlaybacks.add(playback);
+  playback.then(
+    () => activePitchPlaybacks.delete(playback),
+    () => activePitchPlaybacks.delete(playback),
+  );
+
+  return playback;
+}
+
+export async function waitForActivePitchPlayback(): Promise<void> {
+  await Promise.allSettled([...activePitchPlaybacks]);
 }
 
 export async function preloadPositionPitch(position: FretPosition, toneId: GuitarToneId): Promise<void> {

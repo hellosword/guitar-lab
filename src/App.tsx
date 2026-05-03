@@ -6,7 +6,7 @@ import type { FretboardPositionLabel, FretboardPositionState } from './component
 import NoteSelector from './components/NoteSelector';
 import SolfeggioSelector from './components/SolfeggioSelector';
 import Tablature from './components/Tablature';
-import { playPositionPitch, preloadPositionPitch, type GuitarToneId } from './lib/audio';
+import { playPositionPitch, preloadPositionPitch, waitForActivePitchPlayback, type GuitarToneId } from './lib/audio';
 import {
   formatSolfeggio,
   isSolfeggio,
@@ -634,6 +634,7 @@ function App() {
   const [positionStartedAt, setPositionStartedAt] = useState(() => performance.now());
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const autoAdvanceTimeoutRef = useRef<number | null>(null);
+  const autoAdvanceRunRef = useRef(0);
 
   const currentQuestion = questions[currentIndex];
   const isFinished = currentIndex >= questions.length;
@@ -833,6 +834,8 @@ function App() {
   }
 
   function cancelAutoAdvance(): void {
+    autoAdvanceRunRef.current += 1;
+
     if (autoAdvanceTimeoutRef.current !== null) {
       window.clearTimeout(autoAdvanceTimeoutRef.current);
       autoAdvanceTimeoutRef.current = null;
@@ -841,10 +844,25 @@ function App() {
 
   function scheduleAutoAdvance(): void {
     cancelAutoAdvance();
-    autoAdvanceTimeoutRef.current = window.setTimeout(() => {
-      autoAdvanceTimeoutRef.current = null;
+    const runId = autoAdvanceRunRef.current;
+    const minimumDelay = new Promise<void>((resolve) => {
+      autoAdvanceTimeoutRef.current = window.setTimeout(() => {
+        autoAdvanceTimeoutRef.current = null;
+        resolve();
+      }, PRACTICE_INTERACTION_CONFIG.correctAnswerAutoAdvanceMs);
+    });
+
+    Promise.all([minimumDelay, waitForActivePitchPlayback()]).then(() => {
+      if (autoAdvanceRunRef.current !== runId) {
+        return;
+      }
+
       goToNextQuestion();
-    }, PRACTICE_INTERACTION_CONFIG.correctAnswerAutoAdvanceMs);
+    }).catch(() => {
+      if (autoAdvanceRunRef.current === runId) {
+        goToNextQuestion();
+      }
+    });
   }
 
   function handlePositionAnswerClick(position: FretPosition): void {
