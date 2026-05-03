@@ -138,3 +138,4 @@
 | 2026-05-02 | v0.0.3 | 本地预览禁用 PWA 离线缓存，正式发布改用 `build:pwa` | `vite.config.ts`、`package.json`、`src/appVersion.ts` |
 | 2026-05-02 | 文档期 | 前端项目基础概念入门文档 | `docs/knowledge/frontend-project-basics-for-beginners.md` |
 | 2026-05-02 | 文档期 | 前端项目基础概念入门文档重构：增加游戏开发/Python 类比与拓扑顺序 | `docs/knowledge/frontend-project-basics-for-beginners.md` |
+| 2026-05-03 | 文档期 | 自适应练习记忆系统规格 | `docs/product/adaptive-practice-memory-spec.md` |
