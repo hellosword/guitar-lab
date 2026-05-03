@@ -15,14 +15,7 @@
 
 ## 高优先级（建议本周内）
 
-### 开发：音名唱名练习优化
-- **来源**：本次对话（2026-05-03），基于 `note-to-solfeggio` 题型体验反馈
-- **内容**：把“音名 → 唱名”升级为核心练习能力，逐项讨论后再实现
-  - 补充规格：定义 `note-to-solfeggio` 的统计单位为 `key + noteName -> solfeggio`
-  - 自适应出题：按“音名静态弱点权重 + 本轮动态覆盖权重”选择下一题，出过的音名清空本轮动态权重
-  - 弱点地图扩展：增加“音名 → 唱名”映射弱点区，不硬塞进指板热图，使用近期压力分与相对分位显示
-  - 测试覆盖：显示模式切换、布局结构、自适应出题、弱点地图映射区和既有题型不回退
-- **预期产出**：分阶段完成 `note-to-solfeggio` 的规格、全局显示模式、交互布局、自适应调度与弱点地图支持
+暂无。
 
 ---
 
@@ -116,3 +109,4 @@
 | 2026-05-03 | v0.0.23 | 图选入口收纳：将“图选”移到练习模式标题旁，模式按钮行只保留真实练习模式 | `src/App.tsx`、`docs/product/practice-path-interaction-framework-spec.md` |
 | 2026-05-03 | v0.0.24 | 通路视图 tab 化：将练习/查看弱点改为同一通路下的 tab，并统一下方内容区布局 | `src/App.tsx`、`docs/product/practice-path-interaction-framework-spec.md`、`tests/e2e/mvp-practice.spec.ts` |
 | 2026-05-03 | v0.0.25 | 日常练习密度优化：压缩顶部 Header 和练习模式工具栏，让题目与作答区更早进入首屏 | `src/App.tsx`、`docs/product/practice-path-interaction-framework-spec.md`、`tests/e2e/mvp-practice.spec.ts` |
+| 2026-05-03 | v0.0.26 | 音名唱名练习升级：按 `key + noteName -> solfeggio` 记录历史、自适应出题，并新增对应弱点地图 | `src/modules/fretboard-game/practiceSession.ts`、`src/modules/fretboard-game/adaptivePracticeConfig.ts`、`src/App.tsx`、`tests/e2e/mvp-practice.spec.ts` |

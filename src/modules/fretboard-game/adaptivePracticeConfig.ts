@@ -43,6 +43,24 @@ export const ADAPTIVE_PRACTICE_CONFIG = {
     },
   },
   /**
+   * 音名唱名调度器。
+   *
+   * 统计粒度是 key + noteName -> solfeggio，不再绑定具体指板位置。
+   * 动态权重用于一轮内覆盖不同音名，出过的音名会清空本轮覆盖压力。
+   */
+  noteToSolfeggioScheduler: {
+    staticWeight: {
+      baseWeight: 1,
+      maxWeaknessBonus: 3,
+      maxFinalWeight: 4,
+    },
+    dynamicWeight: {
+      gainPerQuestion: 1,
+      maxBonus: 4,
+      resetScope: 'same-note',
+    },
+  },
+  /**
    * 弱点地图显示层。
    *
    * 地图颜色不直接使用永久累计的 wrongCount / slowCount，

@@ -18,7 +18,7 @@ test('MVP 练习页可见并能完成一道音名题', async ({ page }) => {
   await page.goto('/');
 
   await expect(page.getByRole('heading', { name: '位置、音名、唱名反应训练' })).toBeVisible();
-  await expect(page.getByText('v0.0.25')).toBeVisible();
+  await expect(page.getByText('v0.0.26')).toBeVisible();
   await expect(page.getByRole('button', { name: 'G 大调' })).toBeVisible();
   await expect(page.getByRole('button', { name: '速查' })).toBeVisible();
   await expect(page.getByRole('button', { name: '综合练习' })).toBeVisible();
@@ -80,6 +80,7 @@ test('单选题答对后会短暂停顿并自动进入下一题', async ({ page 
 
   await expect(page.getByText('答对了')).toBeVisible();
   await expect(page.getByText('第 2 / 20 题')).toBeVisible();
+  await expect(page.getByText('B', { exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: '下一题' })).toHaveCount(0);
 });
 
@@ -140,7 +141,7 @@ test('练习记忆会按版本写入本地并跨刷新保留', async ({ page }) 
   };
 
   expect(parsedBeforeReload.schemaVersion).toBe(1);
-  expect(parsedBeforeReload.appVersion).toBe('0.0.25');
+  expect(parsedBeforeReload.appVersion).toBe('0.0.26');
   expect(parsedBeforeReload.recentEvents?.length).toBeGreaterThan(0);
   expect(Object.keys(parsedBeforeReload.masteryMap ?? {}).length).toBeGreaterThan(0);
   expect(parsedBeforeReload.recentEvents).toEqual(
@@ -178,11 +179,67 @@ test('弱点地图可以随时查看音名定位弱点', async ({ page }) => {
   await expect(page.getByText('音名/唱名：B / Mi')).toBeVisible();
 });
 
+test('音名唱名会记录映射粒度并显示对应弱点地图', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: '音名唱名' }).click();
+  await expect(page.getByText('B', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Do', exact: true }).click();
+
+  const storedMemory = await page.evaluate(() => (
+    window.localStorage.getItem('guitarLab.practiceMemory.v1')
+  ));
+  expect(storedMemory).not.toBeNull();
+
+  const parsedMemory = JSON.parse(storedMemory ?? '{}') as {
+    recentEvents?: Array<{
+      mappingKind?: string;
+      itemKey?: string;
+      outcome?: string;
+      questionType?: string;
+    }>;
+    masteryMap?: Record<string, {
+      mappingKind?: string;
+      noteName?: string;
+      solfeggio?: string;
+      positionId?: string;
+      wrongCount?: number;
+    }>;
+  };
+  const itemKey = 'note-to-solfeggio|G major|B|Mi|';
+
+  expect(parsedMemory.recentEvents).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        mappingKind: 'note-to-solfeggio',
+        itemKey,
+        outcome: 'wrong',
+        questionType: 'note-to-solfeggio',
+      }),
+    ]),
+  );
+  expect(parsedMemory.masteryMap?.[itemKey]).toEqual(
+    expect.objectContaining({
+      mappingKind: 'note-to-solfeggio',
+      noteName: 'B',
+      solfeggio: 'Mi',
+      wrongCount: 1,
+    }),
+  );
+
+  await page.getByRole('tab', { name: '查看弱点' }).click();
+  await expect(page.getByRole('heading', { name: '音名唱名弱点地图' })).toBeVisible();
+  await expect(page.getByText('G 大调 · 音名 -> 唱名')).toBeVisible();
+  await expect(page.getByText('Top 5 弱点映射')).toBeVisible();
+  await expect(page.getByText('B -> Mi').first()).toBeVisible();
+  await expect(page.getByText('音名/唱名：B / Mi')).toBeVisible();
+});
+
 test('全局唱名显示模式会同步影响练习、指板记忆和弱点地图', async ({ page }) => {
   const bItemKey = 'note-to-position|G major|B|Mi|2-0';
   const memory = {
     schemaVersion: 1,
-    appVersion: '0.0.25',
+    appVersion: '0.0.26',
     createdAt: '2026-05-03T00:00:00.000Z',
     updatedAt: '2026-05-03T00:00:00.000Z',
     profile: { id: 'test-profile' },

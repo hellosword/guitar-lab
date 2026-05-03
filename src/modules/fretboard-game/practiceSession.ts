@@ -7,7 +7,7 @@ import {
   isGKeyFocusNote,
   isSamePosition,
 } from '../../lib/theory';
-import type { FretPosition, PracticeKey, SharpNoteName } from '../../types/theory';
+import type { FretPosition, PracticeKey, SharpNoteName, Solfeggio } from '../../types/theory';
 import {
   createPracticeItemKey,
   getPracticeItemWeight,
@@ -195,6 +195,32 @@ function getNoteToPositionEntry(
     : memory.masteryMap[createPracticeItemKey('note-to-position', key, noteName, solfeggio, position)];
 }
 
+function getNoteToSolfeggioEntry(
+  memory: PracticeMemoryDocumentV1 | undefined,
+  key: PracticeKey,
+  noteName: SharpNoteName,
+  solfeggio: Solfeggio,
+): MasteryEntryV1 | undefined {
+  return memory?.masteryMap[createPracticeItemKey('note-to-solfeggio', key, noteName, solfeggio)];
+}
+
+function getNoteToSolfeggioWeight(
+  memory: PracticeMemoryDocumentV1 | undefined,
+  key: PracticeKey,
+  noteName: SharpNoteName,
+  solfeggio: Solfeggio,
+): number {
+  const schedulerConfig = ADAPTIVE_PRACTICE_CONFIG.noteToSolfeggioScheduler.staticWeight;
+  const entry = getNoteToSolfeggioEntry(memory, key, noteName, solfeggio);
+  const weaknessScore = entry?.weaknessScore ?? 0;
+  const weaknessBonus = Math.min(weaknessScore, schedulerConfig.maxWeaknessBonus);
+
+  return Math.min(
+    schedulerConfig.baseWeight + weaknessBonus,
+    schedulerConfig.maxFinalWeight,
+  );
+}
+
 interface NoteToPositionCandidate {
   noteName: SharpNoteName;
   position: FretPosition;
@@ -208,6 +234,23 @@ interface NoteToPositionSchedulerState {
 function createNoteToPositionSchedulerState(): NoteToPositionSchedulerState {
   return {
     dynamicWeightByPositionId: {},
+  };
+}
+
+interface NoteToSolfeggioCandidate {
+  noteName: SharpNoteName;
+  solfeggio: Solfeggio;
+  position: FretPosition;
+  weight: number;
+}
+
+interface NoteToSolfeggioSchedulerState {
+  dynamicWeightByNoteName: Partial<Record<SharpNoteName, number>>;
+}
+
+function createNoteToSolfeggioSchedulerState(): NoteToSolfeggioSchedulerState {
+  return {
+    dynamicWeightByNoteName: {},
   };
 }
 
@@ -235,6 +278,73 @@ function getCandidatePositions(config: MvpPracticeConfig): FretPosition[] {
     { min: minFret, max: maxFret },
     { min: minString as 1, max: maxString as 6 },
   );
+}
+
+function getNoteToSolfeggioCandidates(
+  config: MvpPracticeConfig,
+  state: NoteToSolfeggioSchedulerState,
+  memory?: PracticeMemoryDocumentV1,
+): NoteToSolfeggioCandidate[] {
+  const candidateByNoteName = new Map<SharpNoteName, NoteToSolfeggioCandidate>();
+
+  for (const position of getCandidatePositions(config)) {
+    const noteName = getNoteAtPosition(position);
+    const solfeggio = getSolfeggioInKey(noteName, config.key);
+
+    if (solfeggio === null || candidateByNoteName.has(noteName)) {
+      continue;
+    }
+
+    const staticWeight = getNoteToSolfeggioWeight(memory, config.key, noteName, solfeggio);
+    const dynamicWeight = state.dynamicWeightByNoteName[noteName] ?? 0;
+    candidateByNoteName.set(noteName, {
+      noteName,
+      solfeggio,
+      position,
+      weight: staticWeight + dynamicWeight,
+    });
+  }
+
+  return [...candidateByNoteName.values()];
+}
+
+function pickScheduledNoteToSolfeggioTarget(
+  config: MvpPracticeConfig,
+  index: number,
+  fallbackPosition: FretPosition,
+  state: NoteToSolfeggioSchedulerState,
+  memory?: PracticeMemoryDocumentV1,
+): NoteToSolfeggioCandidate {
+  const candidates = getNoteToSolfeggioCandidates(config, state, memory);
+  const baseWeight = ADAPTIVE_PRACTICE_CONFIG.noteToSolfeggioScheduler.staticWeight.baseWeight;
+  const hasAdaptivePressure = candidates.some((candidate) => candidate.weight !== baseWeight);
+
+  if (!hasAdaptivePressure) {
+    const fallbackNoteName = getNoteAtPosition(fallbackPosition);
+    return candidates.find((candidate) => candidate.noteName === fallbackNoteName) ?? candidates[0];
+  }
+
+  return pickByDeterministicWeight(candidates, (candidate) => candidate.weight, index, 47);
+}
+
+function updateNoteToSolfeggioDynamicWeights(
+  config: MvpPracticeConfig,
+  targetNoteName: SharpNoteName,
+  state: NoteToSolfeggioSchedulerState,
+): void {
+  const dynamicConfig = ADAPTIVE_PRACTICE_CONFIG.noteToSolfeggioScheduler.dynamicWeight;
+
+  for (const candidate of getNoteToSolfeggioCandidates(config, state)) {
+    if (candidate.noteName === targetNoteName) {
+      state.dynamicWeightByNoteName[candidate.noteName] = 0;
+      continue;
+    }
+
+    state.dynamicWeightByNoteName[candidate.noteName] = Math.min(
+      (state.dynamicWeightByNoteName[candidate.noteName] ?? 0) + dynamicConfig.gainPerQuestion,
+      dynamicConfig.maxBonus,
+    );
+  }
 }
 
 function pickScheduledNoteToPositionTarget(
@@ -351,6 +461,7 @@ export function createQuestion(
   index: number,
   memory?: PracticeMemoryDocumentV1,
   noteToPositionSchedulerState = createNoteToPositionSchedulerState(),
+  noteToSolfeggioSchedulerState = createNoteToSolfeggioSchedulerState(),
 ): MvpQuestion {
   const [minFret, maxFret] = config.fretRange;
   const [minString, maxString] = config.stringRange;
@@ -406,6 +517,34 @@ export function createQuestion(
     };
   }
 
+  if (type === 'note-to-solfeggio') {
+    const target = pickScheduledNoteToSolfeggioTarget(
+      config,
+      index,
+      position,
+      noteToSolfeggioSchedulerState,
+      memory,
+    );
+
+    updateNoteToSolfeggioDynamicWeights(config, target.noteName, noteToSolfeggioSchedulerState);
+
+    return {
+      id: `${type}-${config.key}-${target.noteName}-${index}`,
+      type,
+      key: config.key,
+      position: target.position,
+      noteName: target.noteName,
+      solfeggio: target.solfeggio,
+      answer: target.solfeggio,
+      targetPositions: [target.position],
+      prompt: QUESTION_PROMPTS[type],
+      answerKind: 'solfeggio',
+      sourceMedium: 'note',
+      isFocusNote: config.key === 'G major' && target.noteName === 'F#',
+      isWeakFocus: getNoteToSolfeggioWeight(memory, config.key, target.noteName, target.solfeggio) > ADAPTIVE_PRACTICE_CONFIG.noteToSolfeggioScheduler.staticWeight.baseWeight,
+    };
+  }
+
   const answerKind = type.endsWith('note') ? 'note' : 'solfeggio';
   const sourceMedium = type.startsWith('board') ? 'board' : type.startsWith('tab') ? 'tab' : 'note';
 
@@ -428,9 +567,10 @@ export function createQuestion(
 export function createQuestionSet(config: MvpPracticeConfig, memory?: PracticeMemoryDocumentV1): MvpQuestion[] {
   const questions: MvpQuestion[] = [];
   const noteToPositionSchedulerState = createNoteToPositionSchedulerState();
+  const noteToSolfeggioSchedulerState = createNoteToSolfeggioSchedulerState();
 
   for (let index = 0; index < config.questionCount; index += 1) {
-    questions.push(createQuestion(config, index, memory, noteToPositionSchedulerState));
+    questions.push(createQuestion(config, index, memory, noteToPositionSchedulerState, noteToSolfeggioSchedulerState));
   }
 
   return questions;

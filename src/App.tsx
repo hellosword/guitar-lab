@@ -135,7 +135,7 @@ const PRACTICE_PATH_OPTIONS: PracticePathOption[] = [
     to: '唱名',
     label: '音名 -> 唱名',
     description: '看到音名后，快速反应它在当前调里的首调唱名。',
-    weaknessAvailable: false,
+    weaknessAvailable: true,
     edgePosition: { left: '66%', top: '66%' },
   },
   {
@@ -166,6 +166,22 @@ interface WeaknessMapEntry {
   noteName: SharpNoteName;
   solfeggio: string;
   position: FretPosition;
+  attempts: number;
+  correctCount: number;
+  wrongCount: number;
+  slowCount: number;
+  averageMs: number | null;
+  lastMs: number | null;
+  weaknessScore: number;
+  fastCorrectStreak: number;
+  recentPressure: number;
+  status: WeaknessStatus;
+}
+
+interface NoteSolfeggioWeaknessEntry {
+  itemKey: string;
+  noteName: SharpNoteName;
+  solfeggio: string;
   attempts: number;
   correctCount: number;
   wrongCount: number;
@@ -395,11 +411,42 @@ function toWeaknessMapEntry(entry: MasteryEntryV1, memory: PracticeMemoryDocumen
   };
 }
 
+function toNoteSolfeggioWeaknessEntry(
+  entry: MasteryEntryV1,
+  memory: PracticeMemoryDocumentV1,
+): NoteSolfeggioWeaknessEntry | null {
+  if (entry.mappingKind !== 'note-to-solfeggio' || entry.noteName === undefined) {
+    return null;
+  }
+
+  return {
+    itemKey: entry.itemKey,
+    noteName: entry.noteName,
+    solfeggio: entry.solfeggio ?? '未知',
+    attempts: entry.attempts,
+    correctCount: entry.correctCount,
+    wrongCount: entry.wrongCount,
+    slowCount: entry.slowCount,
+    averageMs: entry.averageMs,
+    lastMs: entry.lastMs,
+    weaknessScore: entry.weaknessScore,
+    fastCorrectStreak: entry.fastCorrectStreak,
+    recentPressure: getWeaknessMapRecentPressure(memory, entry.itemKey),
+    status: 'practiced',
+  };
+}
+
 function formatWeaknessSolfeggio(value: string, solfeggioDisplayMode: SolfeggioDisplayMode): string {
   return isSolfeggio(value) ? formatSolfeggio(value, solfeggioDisplayMode) : value;
 }
 
-function applyWeaknessMapStatuses(entries: WeaknessMapEntry[]): WeaknessMapEntry[] {
+function applyWeaknessMapStatuses<T extends {
+  itemKey: string;
+  recentPressure: number;
+  weaknessScore: number;
+  fastCorrectStreak: number;
+  status: WeaknessStatus;
+}>(entries: T[]): T[] {
   const displayConfig = ADAPTIVE_PRACTICE_CONFIG.weaknessMapDisplay;
   const pressureEntries = [...entries]
     .filter((entry) => entry.recentPressure > 0)
@@ -445,6 +492,19 @@ function getWeaknessEntries(memory: PracticeMemoryDocumentV1, practiceKey: Pract
   return applyWeaknessMapStatuses(entries);
 }
 
+function getNoteSolfeggioWeaknessEntries(
+  memory: PracticeMemoryDocumentV1,
+  practiceKey: PracticeKey,
+): NoteSolfeggioWeaknessEntry[] {
+  const entries = Object.values(memory.masteryMap)
+    .filter((entry) => entry.key === practiceKey)
+    .map((entry) => toNoteSolfeggioWeaknessEntry(entry, memory))
+    .filter((entry): entry is NoteSolfeggioWeaknessEntry => entry !== null)
+    .filter((entry) => isNoteInKey(entry.noteName, practiceKey));
+
+  return applyWeaknessMapStatuses(entries);
+}
+
 function getOffKeyMistakeEntries(memory: PracticeMemoryDocumentV1, practiceKey: PracticeKey): WeaknessMapEntry[] {
   return Object.values(memory.masteryMap)
     .filter((entry) => entry.key === practiceKey && entry.wrongCount > 0)
@@ -454,6 +514,17 @@ function getOffKeyMistakeEntries(memory: PracticeMemoryDocumentV1, practiceKey: 
 }
 
 function sortWeaknessEntries(entries: WeaknessMapEntry[]): WeaknessMapEntry[] {
+  return [...entries].sort((a, b) => (
+    b.recentPressure - a.recentPressure
+      || b.weaknessScore - a.weaknessScore
+      || b.wrongCount - a.wrongCount
+      || b.slowCount - a.slowCount
+      || (b.averageMs ?? 0) - (a.averageMs ?? 0)
+      || b.attempts - a.attempts
+  ));
+}
+
+function sortNoteSolfeggioWeaknessEntries(entries: NoteSolfeggioWeaknessEntry[]): NoteSolfeggioWeaknessEntry[] {
   return [...entries].sort((a, b) => (
     b.recentPressure - a.recentPressure
       || b.weaknessScore - a.weaknessScore
@@ -934,6 +1005,7 @@ function App() {
             />
             {practiceSubView === 'weakness' ? (
               <WeaknessMapView
+                modeId={config.modeId}
                 practiceKey={config.key}
                 memory={practiceMemory}
                 solfeggioDisplayMode={solfeggioDisplayMode}
@@ -1774,6 +1846,7 @@ function FretboardMemoryView({
 }
 
 interface WeaknessMapViewProps {
+  modeId: PracticeModeId;
   practiceKey: PracticeKey;
   memory: PracticeMemoryDocumentV1;
   solfeggioDisplayMode: SolfeggioDisplayMode;
@@ -1822,7 +1895,196 @@ function getWeaknessLabel(entry: WeaknessMapEntry): FretboardPositionLabel {
   };
 }
 
+interface NoteSolfeggioWeaknessViewProps {
+  practiceKey: PracticeKey;
+  memory: PracticeMemoryDocumentV1;
+  solfeggioDisplayMode: SolfeggioDisplayMode;
+  pathLabel: string;
+}
+
+function NoteSolfeggioWeaknessView({
+  practiceKey,
+  memory,
+  solfeggioDisplayMode,
+  pathLabel,
+}: NoteSolfeggioWeaknessViewProps) {
+  const [selectedItemKey, setSelectedItemKey] = useState<string | null>(null);
+  const entries = getNoteSolfeggioWeaknessEntries(memory, practiceKey);
+  const entryByNoteName = new Map(entries.map((entry) => [entry.noteName, entry]));
+  const topEntries = sortNoteSolfeggioWeaknessEntries(entries)
+    .filter((entry) => entry.status === 'danger' || entry.status === 'slow')
+    .slice(0, 5);
+  const weakCount = entries.filter((entry) => entry.status === 'danger' || entry.status === 'slow').length;
+  const masteredCount = entries.filter((entry) => entry.status === 'mastered').length;
+  const selectedEntry = selectedItemKey === null
+    ? topEntries[0] ?? entries[0] ?? null
+    : entries.find((entry) => entry.itemKey === selectedItemKey) ?? null;
+  const mapping = getKeySolfeggioMap(practiceKey);
+
+  function getStatusClass(status: WeaknessStatus): string {
+    if (status === 'danger') {
+      return 'border-rose-300/50 bg-rose-500/20 text-rose-50';
+    }
+
+    if (status === 'slow') {
+      return 'border-amber-300/50 bg-amber-500/20 text-amber-50';
+    }
+
+    if (status === 'mastered') {
+      return 'border-emerald-300/40 bg-emerald-500/15 text-emerald-50';
+    }
+
+    return 'border-white/10 bg-black/20 text-slate-200';
+  }
+
+  return (
+    <section className="grid flex-1 gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
+      <div className="space-y-5">
+        <div className="rounded-lg border border-white/10 bg-white/10 p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Weakness Map</p>
+              <h2 className="mt-2 text-xl font-semibold">音名唱名弱点地图</h2>
+              <p className="mt-2 text-sm leading-6 text-slate-400">
+                以“当前调 · 音名 {'->'} 唱名”为粒度统计。暖色代表近期相对更需要复习，熟练项会降权但保留少量复查机会。
+              </p>
+            </div>
+            <div className="rounded-md bg-black/25 px-3 py-2 text-sm text-slate-300">
+              {practiceKey === 'G major' ? 'G 大调' : 'C 大调'} · {pathLabel}
+            </div>
+          </div>
+
+          <div className="mt-4 grid gap-3 sm:grid-cols-3">
+            <SummaryItem label="有记录映射" value={`${entries.length}`} />
+            <SummaryItem label="近期关注" value={`${weakCount}`} />
+            <SummaryItem label="熟练映射" value={`${masteredCount}`} />
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-white/10 bg-white/10 p-4">
+          {entries.length === 0 ? (
+            <div className="grid min-h-[220px] place-items-center rounded-lg bg-black/20 px-5 text-center">
+              <div>
+                <p className="text-lg font-semibold text-slate-100">还没有音名唱名记录</p>
+                <p className="mt-2 text-sm leading-6 text-slate-400">
+                  去“练习”里选择音名唱名，完成几题后这里会显示慢反应、错答和熟练映射。
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              {mapping.map((item) => {
+                const entry = entryByNoteName.get(item.noteName);
+                const status = entry?.status ?? 'practiced';
+                const noteColor = NOTE_COLORS[item.noteName];
+                const isSelected = selectedEntry?.noteName === item.noteName;
+
+                return (
+                  <button
+                    key={item.noteName}
+                    type="button"
+                    aria-pressed={isSelected}
+                    onClick={() => {
+                      if (entry !== undefined) {
+                        setSelectedItemKey(entry.itemKey);
+                      }
+                    }}
+                    className={`min-h-[128px] rounded-lg border p-4 text-left transition hover:bg-white/10 ${getStatusClass(status)} ${isSelected ? 'ring-2 ring-white/70' : ''}`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-xs uppercase tracking-[0.18em] text-current/65">Mapping</p>
+                        <p className="mt-2 text-2xl font-bold">
+                          {item.noteName} {'->'} {formatSolfeggio(item.solfeggio, solfeggioDisplayMode)}
+                        </p>
+                      </div>
+                      <span
+                        className="grid h-9 w-9 place-items-center rounded-full border text-sm font-bold"
+                        style={{
+                          backgroundColor: noteColor.softFill,
+                          borderColor: noteColor.stroke,
+                          color: noteColor.text,
+                        }}
+                      >
+                        {item.noteName}
+                      </span>
+                    </div>
+                    <p className="mt-4 text-sm leading-6 text-current/75">
+                      {entry === undefined
+                        ? '暂无记录'
+                        : `${WEAKNESS_STATUS_LABELS[entry.status]} · 近期压力 ${entry.recentPressure.toFixed(1)} · 尝试 ${entry.attempts}`}
+                    </p>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <aside className="flex flex-col gap-4 rounded-lg border border-white/10 bg-[#171a27] p-4">
+        <div>
+          <p className="text-sm font-semibold text-slate-200">Top 5 弱点映射</p>
+          <p className="mt-1 text-sm leading-6 text-slate-500">
+            按近期压力排序。这里看的是音名到唱名的反应，不绑定某个指板位置。
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          {topEntries.length === 0 ? (
+            <p className="rounded-lg bg-black/20 p-3 text-sm leading-6 text-slate-400">
+              当前没有明显弱点。继续练几轮后，这里会优先显示需要复习的音名唱名映射。
+            </p>
+          ) : (
+            topEntries.map((entry) => (
+              <button
+                key={entry.itemKey}
+                type="button"
+                onClick={() => setSelectedItemKey(entry.itemKey)}
+                className="w-full rounded-lg border border-white/10 bg-black/20 p-3 text-left transition hover:bg-white/10"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm font-semibold text-slate-100">
+                    {entry.noteName} {'->'} {formatWeaknessSolfeggio(entry.solfeggio, solfeggioDisplayMode)}
+                  </p>
+                  <span className="rounded-md bg-white/10 px-2 py-1 text-xs text-slate-300">
+                    {WEAKNESS_STATUS_LABELS[entry.status]}
+                  </span>
+                </div>
+                <p className="mt-2 text-sm leading-6 text-slate-400">
+                  近期压力 {entry.recentPressure.toFixed(1)} · 弱点分 {entry.weaknessScore} · 历史慢 {entry.slowCount} · 历史错 {entry.wrongCount}
+                  {entry.averageMs === null ? '' : ` · 平均 ${formatMs(entry.averageMs)}`}
+                </p>
+              </button>
+            ))
+          )}
+        </div>
+
+        <div className="rounded-lg border border-white/10 bg-white/8 p-4">
+          <p className="text-sm font-semibold text-slate-200">当前映射</p>
+          {selectedEntry === null ? (
+            <p className="mt-2 text-sm leading-6 text-slate-500">点击左侧任意映射查看详情。</p>
+          ) : (
+            <div className="mt-3 space-y-2 text-sm text-slate-300">
+              <p>音名/唱名：{selectedEntry.noteName} / {formatWeaknessSolfeggio(selectedEntry.solfeggio, solfeggioDisplayMode)}</p>
+              <p>状态：{WEAKNESS_STATUS_LABELS[selectedEntry.status]}</p>
+              <p>尝试：{selectedEntry.attempts}，正确 {selectedEntry.correctCount}，错误 {selectedEntry.wrongCount}</p>
+              <p>近期压力：{selectedEntry.recentPressure.toFixed(1)}，弱点分 {selectedEntry.weaknessScore}</p>
+              <p>历史慢速：{selectedEntry.slowCount}</p>
+              <p>
+                最近：{selectedEntry.lastMs === null ? '暂无' : formatMs(selectedEntry.lastMs)}
+                {selectedEntry.averageMs === null ? '' : `，平均 ${formatMs(selectedEntry.averageMs)}`}
+              </p>
+            </div>
+          )}
+        </div>
+      </aside>
+    </section>
+  );
+}
+
 function WeaknessMapView({
+  modeId,
   practiceKey,
   memory,
   solfeggioDisplayMode,
@@ -1830,6 +2092,17 @@ function WeaknessMapView({
   pathLabel,
   onPositionClick,
 }: WeaknessMapViewProps) {
+  if (modeId === 'note-to-solfeggio') {
+    return (
+      <NoteSolfeggioWeaknessView
+        practiceKey={practiceKey}
+        memory={memory}
+        solfeggioDisplayMode={solfeggioDisplayMode}
+        pathLabel={pathLabel}
+      />
+    );
+  }
+
   const entries = getWeaknessEntries(memory, practiceKey);
   const offKeyEntries = getOffKeyMistakeEntries(memory, practiceKey);
   const topEntries = sortWeaknessEntries(entries)
