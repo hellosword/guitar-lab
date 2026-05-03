@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import { APP_VERSION } from './appVersion';
 import Fretboard from './components/Fretboard';
 import type { FretboardPositionLabel, FretboardPositionState } from './components/Fretboard';
@@ -6,6 +7,13 @@ import NoteSelector from './components/NoteSelector';
 import SolfeggioSelector from './components/SolfeggioSelector';
 import Tablature from './components/Tablature';
 import { playPositionPitch } from './lib/audio';
+import {
+  formatSolfeggio,
+  isSolfeggio,
+  loadSolfeggioDisplayMode,
+  saveSolfeggioDisplayMode,
+  type SolfeggioDisplayMode,
+} from './lib/solfeggioDisplay';
 import {
   formatPosition,
   getKeySolfeggioMap,
@@ -112,8 +120,12 @@ function formatPositions(positions: FretPosition[]): string {
   return positions.length === 0 ? '未选择' : positions.map(formatPosition).join('、');
 }
 
-function formatAnswerValue(answer: PracticeAnswerValue): string {
-  return Array.isArray(answer) ? formatPositions(answer) : answer;
+function formatAnswerValue(answer: PracticeAnswerValue, solfeggioDisplayMode: SolfeggioDisplayMode): string {
+  if (Array.isArray(answer)) {
+    return formatPositions(answer);
+  }
+
+  return isSolfeggio(answer) ? formatSolfeggio(answer, solfeggioDisplayMode) : answer;
 }
 
 function getPositionStatsKey(question: MvpQuestion, position: FretPosition): string {
@@ -300,6 +312,10 @@ function toWeaknessMapEntry(entry: MasteryEntryV1, memory: PracticeMemoryDocumen
   };
 }
 
+function formatWeaknessSolfeggio(value: string, solfeggioDisplayMode: SolfeggioDisplayMode): string {
+  return isSolfeggio(value) ? formatSolfeggio(value, solfeggioDisplayMode) : value;
+}
+
 function applyWeaknessMapStatuses(entries: WeaknessMapEntry[]): WeaknessMapEntry[] {
   const displayConfig = ADAPTIVE_PRACTICE_CONFIG.weaknessMapDisplay;
   const pressureEntries = [...entries]
@@ -367,6 +383,7 @@ function sortWeaknessEntries(entries: WeaknessMapEntry[]): WeaknessMapEntry[] {
 
 function App() {
   const [activeView, setActiveView] = useState<AppView>('practice');
+  const [solfeggioDisplayMode, setSolfeggioDisplayMode] = useState<SolfeggioDisplayMode>(() => loadSolfeggioDisplayMode());
   const [markerMode, setMarkerMode] = useState<FretboardMarkerMode>('note');
   const [showOutOfKeyNotes, setShowOutOfKeyNotes] = useState(false);
   const [selectedMemoryPosition, setSelectedMemoryPosition] = useState<FretPosition | null>(null);
@@ -389,12 +406,23 @@ function App() {
   const currentQuestion = questions[currentIndex];
   const isFinished = currentIndex >= questions.length;
   const summary = useMemo(() => createPracticeSummary(records), [records]);
-  const memoryHighlights = useMemo(() => getPracticeMemoryHighlights(practiceMemory), [practiceMemory]);
+  const memoryHighlights = useMemo(
+    () => getPracticeMemoryHighlights(
+      practiceMemory,
+      4,
+      (solfeggio) => formatSolfeggio(solfeggio, solfeggioDisplayMode),
+    ),
+    [practiceMemory, solfeggioDisplayMode],
+  );
   const positionsToClick = currentQuestion === undefined ? [] : getPositionsToClick(currentQuestion, masteredAnswerPositions);
 
   useEffect(() => {
     savePracticeMemory(practiceMemory);
   }, [practiceMemory]);
+
+  useEffect(() => {
+    saveSolfeggioDisplayMode(solfeggioDisplayMode);
+  }, [solfeggioDisplayMode]);
 
   useEffect(() => () => {
     if (autoAdvanceTimeoutRef.current !== null) {
@@ -776,6 +804,10 @@ function App() {
                 {key === 'G major' ? 'G 大调' : 'C 大调'}
               </button>
             ))}
+            <SolfeggioDisplayModeSelector
+              activeMode={solfeggioDisplayMode}
+              onModeChange={setSolfeggioDisplayMode}
+            />
           </div>
         </header>
 
@@ -783,12 +815,14 @@ function App() {
           <WeaknessMapView
             practiceKey={config.key}
             memory={practiceMemory}
+            solfeggioDisplayMode={solfeggioDisplayMode}
             selectedPosition={selectedWeaknessPosition}
             onPositionClick={handleWeaknessPositionClick}
           />
         ) : activeView === 'memory' ? (
           <FretboardMemoryView
             practiceKey={config.key}
+            solfeggioDisplayMode={solfeggioDisplayMode}
             markerMode={markerMode}
             showOutOfKeyNotes={showOutOfKeyNotes}
             selectedPosition={selectedMemoryPosition}
@@ -819,7 +853,7 @@ function App() {
                   <div className="mt-3 space-y-2">
                     {summary.weakest.map((record) => (
                       <p key={`${record.question.id}-${record.responseMs}`} className="text-sm text-slate-300">
-                        {formatPosition(record.question.position)}：{record.question.noteName} / {record.question.solfeggio}
+                        {formatPosition(record.question.position)}：{record.question.noteName} / {formatSolfeggio(record.question.solfeggio, solfeggioDisplayMode)}
                         ，{record.isCorrect ? '答对但偏慢' : '答错'}，耗时 {formatMs(record.responseMs)}
                       </p>
                     ))}
@@ -944,7 +978,13 @@ function App() {
 
                 {currentQuestion.answerKind === 'positions' && (
                   <div className="rounded-lg border border-white/10 bg-white/10 p-4">
-                    <p className="mb-3 text-sm text-slate-400">空指板</p>
+                    <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
+                      <div>
+                        <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Answer</p>
+                        <h3 className="mt-1 text-lg font-semibold">选择所有位置</h3>
+                      </div>
+                      <p className="text-sm text-slate-500">空指板</p>
+                    </div>
                     <Fretboard
                       fretCount={config.fretRange[1]}
                       selectedPositions={answeredRecord === null ? selectedAnswerPositions : []}
@@ -965,23 +1005,31 @@ function App() {
                     />
                   </div>
                 )}
+
+                {currentQuestion.answerKind !== 'positions' && (
+                  <PracticeAnswerPanel answerKind={currentQuestion.answerKind}>
+                    {currentQuestion.answerKind === 'note' ? (
+                      <NoteSelector disabled={answeredRecord !== null} onSubmit={handleAnswer} />
+                    ) : (
+                      <SolfeggioSelector
+                        disabled={answeredRecord !== null}
+                        displayMode={solfeggioDisplayMode}
+                        onSubmit={handleAnswer}
+                      />
+                    )}
+                  </PracticeAnswerPanel>
+                )}
               </div>
 
               <aside className="flex flex-col gap-4 rounded-lg border border-white/10 bg-[#171a27] p-4">
                 <div>
-                  <p className="text-sm font-semibold text-slate-200">
-                    {currentQuestion.answerKind === 'note'
-                      ? '选择音名'
-                      : currentQuestion.answerKind === 'positions'
-                        ? '选择所有位置'
-                        : '选择唱名'}
-                  </p>
+                  <p className="text-sm font-semibold text-slate-200">练习详情</p>
                   <p className="mt-1 text-sm text-slate-500">
                     {currentQuestion.answerKind === 'note'
-                      ? '一键选择音名，先追求反应速度。'
+                      ? '在下方作答区一键选择音名，右侧保留音频、反馈和统计。'
                       : currentQuestion.answerKind === 'positions'
                         ? '点击空指板上的目标音，系统会立即判定。'
-                        : '使用首调唱名，G 大调里 D 是 Sol。'}
+                        : `在下方作答区选择当前调唱名，G 大调里 D 是 ${formatSolfeggio('Sol', solfeggioDisplayMode)}。`}
                   </p>
                 </div>
 
@@ -993,22 +1041,19 @@ function App() {
                   播放音高
                 </button>
 
-                {currentQuestion.answerKind === 'note' ? (
-                  <NoteSelector disabled={answeredRecord !== null} onSubmit={handleAnswer} />
-                ) : currentQuestion.answerKind === 'positions' ? (
+                {currentQuestion.answerKind === 'positions' && (
                   <PositionHuntPanel
                     foundCount={selectedAnswerPositions.length}
                     targetCount={positionsToClick.length}
                     masteredCount={masteredAnswerPositions.length}
                     isComplete={answeredRecord !== null}
                   />
-                ) : (
-                  <SolfeggioSelector disabled={answeredRecord !== null} onSubmit={handleAnswer} />
                 )}
 
                 {answeredRecord && (
                   <FeedbackPanel
                     record={answeredRecord}
+                    solfeggioDisplayMode={solfeggioDisplayMode}
                     onNext={goToNextQuestion}
                     onReplay={() => playPositionPitch(answeredRecord.question.position)}
                     isLast={currentIndex === questions.length - 1}
@@ -1031,6 +1076,7 @@ function App() {
 
 interface FeedbackPanelProps {
   record: AnswerRecord;
+  solfeggioDisplayMode: SolfeggioDisplayMode;
   isLast: boolean;
   onNext: () => void;
   onReplay: () => Promise<void>;
@@ -1071,6 +1117,62 @@ function PracticeModeSelector({ activeModeId, onModeChange }: PracticeModeSelect
   );
 }
 
+interface PracticeAnswerPanelProps {
+  answerKind: 'note' | 'solfeggio';
+  children: ReactNode;
+}
+
+function PracticeAnswerPanel({ answerKind, children }: PracticeAnswerPanelProps) {
+  return (
+    <div className="rounded-lg border border-white/10 bg-white/10 p-4">
+      <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
+        <div>
+          <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Answer</p>
+          <h3 className="mt-1 text-lg font-semibold">
+            {answerKind === 'note' ? '选择音名' : '选择唱名'}
+          </h3>
+        </div>
+        <p className="text-sm text-slate-500">
+          一键作答，答完后右侧查看反馈。
+        </p>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+interface SolfeggioDisplayModeSelectorProps {
+  activeMode: SolfeggioDisplayMode;
+  onModeChange: (mode: SolfeggioDisplayMode) => void;
+}
+
+function SolfeggioDisplayModeSelector({ activeMode, onModeChange }: SolfeggioDisplayModeSelectorProps) {
+  const options: Array<{ id: SolfeggioDisplayMode; label: string }> = [
+    { id: 'syllable', label: 'Do Re Mi' },
+    { id: 'number', label: '1 2 3' },
+  ];
+
+  return (
+    <div className="flex h-10 overflow-hidden rounded-md border border-white/15 bg-white/8">
+      {options.map((option) => (
+        <button
+          key={option.id}
+          type="button"
+          onClick={() => onModeChange(option.id)}
+          className={`px-3 text-sm font-semibold transition ${
+            activeMode === option.id
+              ? 'bg-white text-slate-950'
+              : 'text-slate-200 hover:bg-white/15'
+          }`}
+          aria-pressed={activeMode === option.id}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 interface PositionHuntPanelProps {
   foundCount: number;
   targetCount: number;
@@ -1096,7 +1198,7 @@ function PositionHuntPanel({ foundCount, targetCount, masteredCount, isComplete 
   );
 }
 
-function FeedbackPanel({ record, isLast, onNext, onReplay }: FeedbackPanelProps) {
+function FeedbackPanel({ record, solfeggioDisplayMode, isLast, onNext, onReplay }: FeedbackPanelProps) {
   const { question } = record;
   const isPositionAnswer = question.answerKind === 'positions';
 
@@ -1104,11 +1206,11 @@ function FeedbackPanel({ record, isLast, onNext, onReplay }: FeedbackPanelProps)
     <div className={`rounded-lg border p-4 ${record.isCorrect ? 'border-emerald-400/40 bg-emerald-400/10' : 'border-rose-400/40 bg-rose-400/10'}`}>
       <p className="text-lg font-bold">{record.isCorrect ? '答对了' : '再记一次'}</p>
       <div className="mt-3 space-y-2 text-sm text-slate-200">
-        <p>你的答案：{formatAnswerValue(record.userAnswer)}</p>
-        <p>正确答案：{formatAnswerValue(question.answer)}</p>
+        <p>你的答案：{formatAnswerValue(record.userAnswer, solfeggioDisplayMode)}</p>
+        <p>正确答案：{formatAnswerValue(question.answer, solfeggioDisplayMode)}</p>
         {!isPositionAnswer && <p>位置：{formatPosition(question.position)}</p>}
         <p>音名：{question.noteName}</p>
-        <p>{question.key === 'G major' ? 'G 大调' : 'C 大调'}唱名：{question.solfeggio}</p>
+        <p>{question.key === 'G major' ? 'G 大调' : 'C 大调'}唱名：{formatSolfeggio(question.solfeggio, solfeggioDisplayMode)}</p>
         {isPositionAnswer ? (
           <>
             {record.missedPositions.length > 0 && <p>漏点：{formatPositions(record.missedPositions)}</p>}
@@ -1116,7 +1218,7 @@ function FeedbackPanel({ record, isLast, onNext, onReplay }: FeedbackPanelProps)
           </>
         ) : (
           <p>
-            反应链：{formatPosition(question.position)} {'->'} {question.noteName} {'->'} {question.solfeggio}
+            反应链：{formatPosition(question.position)} {'->'} {question.noteName} {'->'} {formatSolfeggio(question.solfeggio, solfeggioDisplayMode)}
           </p>
         )}
         <p>耗时：{formatMs(record.responseMs)}{record.isSlow ? '，需要巩固' : ''}</p>
@@ -1147,6 +1249,7 @@ function FeedbackPanel({ record, isLast, onNext, onReplay }: FeedbackPanelProps)
 
 interface FretboardMemoryViewProps {
   practiceKey: PracticeKey;
+  solfeggioDisplayMode: SolfeggioDisplayMode;
   markerMode: FretboardMarkerMode;
   showOutOfKeyNotes: boolean;
   selectedPosition: FretPosition | null;
@@ -1159,6 +1262,7 @@ interface FretboardMemoryViewProps {
 
 function FretboardMemoryView({
   practiceKey,
+  solfeggioDisplayMode,
   markerMode,
   showOutOfKeyNotes,
   selectedPosition,
@@ -1199,7 +1303,7 @@ function FretboardMemoryView({
     return solfeggio === null
       ? null
       : {
-          text: solfeggio,
+          text: formatSolfeggio(solfeggio, solfeggioDisplayMode),
           tone: noteName.includes('#') ? 'accidental' : 'natural',
           fill: noteColor.softFill,
           stroke: noteColor.stroke,
@@ -1299,7 +1403,7 @@ function FretboardMemoryView({
             {mapping.map((item) => (
               <MappingCell
                 key={item.solfeggio}
-                value={item.solfeggio}
+                value={formatSolfeggio(item.solfeggio, solfeggioDisplayMode)}
                 active={selectedSolfeggio === item.solfeggio}
                 color={NOTE_COLORS[item.noteName]}
                 onHoverStart={() => onHoveredNoteChange(item.noteName)}
@@ -1319,7 +1423,7 @@ function FretboardMemoryView({
               <p>音名：{selectedNote}</p>
               <p>
                 {practiceKey === 'G major' ? 'G 大调' : 'C 大调'}唱名：
-                {selectedSolfeggio ?? '调外音'}
+                {selectedSolfeggio === null ? '调外音' : formatSolfeggio(selectedSolfeggio, solfeggioDisplayMode)}
               </p>
             </div>
           )}
@@ -1328,7 +1432,7 @@ function FretboardMemoryView({
         <div className="rounded-lg border border-white/10 bg-white/8 p-4 text-sm leading-6 text-slate-400">
           <p className="font-semibold text-slate-200">使用建议</p>
           <p className="mt-2">
-            先用音名标记确认位置，再切到唱名标记。特别留意 G 大调里 D = Sol，F# = Si。
+            先用音名标记确认位置，再切到唱名标记。特别留意 G 大调里 D = {formatSolfeggio('Sol', solfeggioDisplayMode)}，F# = {formatSolfeggio('Si', solfeggioDisplayMode)}。
           </p>
         </div>
       </aside>
@@ -1339,6 +1443,7 @@ function FretboardMemoryView({
 interface WeaknessMapViewProps {
   practiceKey: PracticeKey;
   memory: PracticeMemoryDocumentV1;
+  solfeggioDisplayMode: SolfeggioDisplayMode;
   selectedPosition: FretPosition | null;
   onPositionClick: (position: FretPosition) => void;
 }
@@ -1383,7 +1488,13 @@ function getWeaknessLabel(entry: WeaknessMapEntry): FretboardPositionLabel {
   };
 }
 
-function WeaknessMapView({ practiceKey, memory, selectedPosition, onPositionClick }: WeaknessMapViewProps) {
+function WeaknessMapView({
+  practiceKey,
+  memory,
+  solfeggioDisplayMode,
+  selectedPosition,
+  onPositionClick,
+}: WeaknessMapViewProps) {
   const entries = getWeaknessEntries(memory, practiceKey);
   const offKeyEntries = getOffKeyMistakeEntries(memory, practiceKey);
   const topEntries = sortWeaknessEntries(entries)
@@ -1470,7 +1581,7 @@ function WeaknessMapView({ practiceKey, memory, selectedPosition, onPositionClic
               >
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-sm font-semibold text-slate-100">
-                    {formatPosition(entry.position)} · {entry.noteName}/{entry.solfeggio}
+                    {formatPosition(entry.position)} · {entry.noteName}/{formatWeaknessSolfeggio(entry.solfeggio, solfeggioDisplayMode)}
                   </p>
                   <span className="rounded-md bg-white/10 px-2 py-1 text-xs text-slate-300">
                     {WEAKNESS_STATUS_LABELS[entry.status]}
@@ -1493,13 +1604,13 @@ function WeaknessMapView({ practiceKey, memory, selectedPosition, onPositionClic
             <div className="mt-3 space-y-2 text-sm text-slate-300">
               <p>位置：{formatPosition(selectedPosition)}</p>
               <p>音名：{selectedNote}</p>
-              <p>{practiceKey === 'G major' ? 'G 大调' : 'C 大调'}唱名：{selectedSolfeggio ?? '调外音'}</p>
+              <p>{practiceKey === 'G major' ? 'G 大调' : 'C 大调'}唱名：{selectedSolfeggio === null ? '调外音' : formatSolfeggio(selectedSolfeggio, solfeggioDisplayMode)}</p>
               <p className="text-slate-500">这个位置还没有音名定位记录。</p>
             </div>
           ) : (
             <div className="mt-3 space-y-2 text-sm text-slate-300">
               <p>位置：{formatPosition(selectedEntry.position)}</p>
-              <p>音名/唱名：{selectedEntry.noteName} / {selectedEntry.solfeggio}</p>
+              <p>音名/唱名：{selectedEntry.noteName} / {formatWeaknessSolfeggio(selectedEntry.solfeggio, solfeggioDisplayMode)}</p>
               <p>状态：{WEAKNESS_STATUS_LABELS[selectedEntry.status]}</p>
               <p>尝试：{selectedEntry.attempts}，正确 {selectedEntry.correctCount}，错误 {selectedEntry.wrongCount}</p>
               <p>近期压力：{selectedEntry.recentPressure.toFixed(1)}，弱点分 {selectedEntry.weaknessScore}</p>

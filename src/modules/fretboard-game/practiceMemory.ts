@@ -108,6 +108,8 @@ export interface PracticeMemoryHighlight {
   outcome: PracticeOutcome;
 }
 
+type SolfeggioFormatter = (solfeggio: Solfeggio) => string;
+
 export const PRACTICE_MEMORY_STORAGE_KEY = 'guitarLab.practiceMemory.v1';
 
 function createId(prefix: string): string {
@@ -497,7 +499,11 @@ export function getPracticeItemWeight(memory: PracticeMemoryDocumentV1, itemKey:
   );
 }
 
-export function getPracticeMemoryHighlights(memory: PracticeMemoryDocumentV1, limit = 4): PracticeMemoryHighlight[] {
+export function getPracticeMemoryHighlights(
+  memory: PracticeMemoryDocumentV1,
+  limit = 4,
+  formatSolfeggio: SolfeggioFormatter = (solfeggio) => solfeggio,
+): PracticeMemoryHighlight[] {
   const eventByItemKey = new Map<string, PracticeEventV1>();
 
   for (const event of memory.recentEvents.slice(-80)) {
@@ -512,7 +518,7 @@ export function getPracticeMemoryHighlights(memory: PracticeMemoryDocumentV1, li
       const event = eventByItemKey.get(entry.itemKey);
       return {
         itemKey: entry.itemKey,
-        label: formatPracticeMemoryEntry(entry),
+        label: formatPracticeMemoryEntry(entry, formatSolfeggio),
         weaknessScore: entry.weaknessScore,
         responseMs: event?.responseMs ?? entry.lastMs,
         outcome: event?.outcome ?? 'wrong',
@@ -520,19 +526,22 @@ export function getPracticeMemoryHighlights(memory: PracticeMemoryDocumentV1, li
     });
 }
 
-export function formatPracticeMemoryEntry(entry: MasteryEntryV1): string {
+export function formatPracticeMemoryEntry(
+  entry: MasteryEntryV1,
+  formatSolfeggio: SolfeggioFormatter = (solfeggio) => solfeggio,
+): string {
   const keyLabel = entry.key === 'G major' ? 'G 大调' : 'C 大调';
   const positionLabel = entry.positionId === undefined ? '' : ` @ ${entry.positionId.replace('-', '弦')}品`;
 
   if (entry.mappingKind === 'note-to-solfeggio') {
-    return `${keyLabel}: ${entry.noteName ?? '-'} -> ${entry.solfeggio ?? '-'}`;
+    return `${keyLabel}: ${entry.noteName ?? '-'} -> ${entry.solfeggio === undefined ? '-' : formatSolfeggio(entry.solfeggio)}`;
   }
 
   if (entry.mappingKind === 'note-to-position') {
     return `${keyLabel}: ${entry.noteName ?? '-'}${positionLabel}`;
   }
 
-  return `${keyLabel}: ${positionLabel} -> ${entry.noteName ?? '-'}${entry.solfeggio === undefined ? '' : ` / ${entry.solfeggio}`}`;
+  return `${keyLabel}: ${positionLabel} -> ${entry.noteName ?? '-'}${entry.solfeggio === undefined ? '' : ` / ${formatSolfeggio(entry.solfeggio)}`}`;
 }
 
 export function syncPracticeMemoryToDevServer(memory: PracticeMemoryDocumentV1): void {

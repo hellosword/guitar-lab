@@ -18,7 +18,7 @@ test('MVP 练习页可见并能完成一道音名题', async ({ page }) => {
   await page.goto('/');
 
   await expect(page.getByRole('heading', { name: '位置、音名、唱名反应训练' })).toBeVisible();
-  await expect(page.getByText('v0.0.13')).toBeVisible();
+  await expect(page.getByText('v0.0.15')).toBeVisible();
   await expect(page.getByRole('button', { name: 'G 大调' })).toBeVisible();
   await expect(page.getByRole('button', { name: '综合练习' })).toBeVisible();
   await expect(page.getByText('第 1 / 20 题')).toBeVisible();
@@ -35,6 +35,25 @@ test('MVP 练习页可见并能完成一道音名题', async ({ page }) => {
   await expect(page.getByText('反应链：')).toBeVisible();
   await expect(page.getByRole('button', { name: '重播音高' })).toBeVisible();
   await expect(page.getByRole('button', { name: '下一题' })).toBeVisible();
+});
+
+test('单选题会把作答区放在题面下方并保留右侧详情', async ({ page }) => {
+  await page.goto('/');
+
+  const fretboardBox = await page.getByRole('img', { name: '吉他指板' }).first().boundingBox();
+  const answerHeadingBox = await page.getByRole('heading', { name: '选择音名' }).boundingBox();
+  expect(fretboardBox).not.toBeNull();
+  expect(answerHeadingBox).not.toBeNull();
+  if (fretboardBox !== null && answerHeadingBox !== null) {
+    expect(answerHeadingBox.y).toBeGreaterThan(fretboardBox.y + fretboardBox.height);
+  }
+
+  await expect(page.getByText('练习详情')).toBeVisible();
+  await expect(page.getByRole('button', { name: '播放音高' })).toBeVisible();
+
+  await page.getByRole('button', { name: '音名唱名' }).click();
+  await expect(page.getByRole('heading', { name: '选择唱名' })).toBeVisible();
+  await expect(page.getByText('在下方作答区选择当前调唱名')).toBeVisible();
 });
 
 test('音名定位题点对会即时标记并在全对后自动进入下一题', async ({ page }) => {
@@ -94,7 +113,7 @@ test('练习记忆会按版本写入本地并跨刷新保留', async ({ page }) 
   };
 
   expect(parsedBeforeReload.schemaVersion).toBe(1);
-  expect(parsedBeforeReload.appVersion).toBe('0.0.13');
+  expect(parsedBeforeReload.appVersion).toBe('0.0.15');
   expect(parsedBeforeReload.recentEvents?.length).toBeGreaterThan(0);
   expect(Object.keys(parsedBeforeReload.masteryMap ?? {}).length).toBeGreaterThan(0);
   expect(parsedBeforeReload.recentEvents).toEqual(
@@ -129,6 +148,83 @@ test('弱点地图可以随时查看音名定位弱点', async ({ page }) => {
   await page.locator('g[aria-label="播放 2 弦 0 品"]').click();
   await expect(page.getByText('当前点击')).toBeVisible();
   await expect(page.getByText('音名/唱名：B / Mi')).toBeVisible();
+});
+
+test('全局唱名显示模式会同步影响练习、指板记忆和弱点地图', async ({ page }) => {
+  const bItemKey = 'note-to-position|G major|B|Mi|2-0';
+  const memory = {
+    schemaVersion: 1,
+    appVersion: '0.0.15',
+    createdAt: '2026-05-03T00:00:00.000Z',
+    updatedAt: '2026-05-03T00:00:00.000Z',
+    profile: { id: 'test-profile' },
+    configSnapshot: {
+      schemaVersion: 1,
+      recentWindowSize: 50,
+      minSamplesForRelativeSlow: 10,
+      slowPercentile: 0.7,
+      slowMedianMultiplier: 1.35,
+      maxValidResponseMs: 60000,
+    },
+    masteryMap: {
+      [bItemKey]: {
+        itemKey: bItemKey,
+        mappingKind: 'note-to-position',
+        key: 'G major',
+        noteName: 'B',
+        solfeggio: 'Mi',
+        positionId: '2-0',
+        attempts: 2,
+        correctCount: 0,
+        wrongCount: 2,
+        slowCount: 0,
+        ignoredCount: 0,
+        averageMs: 2200,
+        lastMs: 2200,
+        recentResponseMs: [2200],
+        lastSeenAt: '2026-05-03T00:00:00.000Z',
+        weaknessScore: 4,
+        fastCorrectStreak: 0,
+      },
+    },
+    responseGroups: {},
+    recentEvents: [{
+      id: 'event-b-1',
+      createdAt: '2026-05-03T00:00:00.000Z',
+      questionId: 'event-b-1',
+      questionType: 'note-to-positions',
+      key: 'G major',
+      mappingKind: 'note-to-position',
+      itemKey: bItemKey,
+      outcome: 'extra-position',
+      responseMs: 2200,
+    }],
+  };
+
+  await page.addInitScript((storedMemory) => {
+    window.localStorage.setItem('guitarLab.practiceMemory.v1', JSON.stringify(storedMemory));
+  }, memory);
+  await page.goto('/');
+
+  await page.getByRole('button', { name: '1 2 3' }).click();
+  await page.getByRole('button', { name: '音名唱名' }).click();
+  await expect(page.getByRole('button', { name: '1', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: '5', exact: true })).toBeVisible();
+
+  await page.getByRole('button', { name: '指板记忆' }).click();
+  await page.getByRole('button', { name: '播放 3 弦 2 品' }).click();
+  await expect(page.getByText('G 大调唱名：2')).toBeVisible();
+
+  await page.getByRole('button', { name: '唱名标记' }).click();
+  await expect(page.locator('g[aria-label="播放 3 弦 2 品"] text')).toHaveText('2');
+
+  await page.getByRole('button', { name: '弱点地图' }).click();
+  await expect(page.getByText('2 弦 0 品 · B/3')).toBeVisible();
+  await page.locator('g[aria-label="播放 2 弦 0 品"]').click();
+  await expect(page.getByText('音名/唱名：B / 3')).toBeVisible();
+
+  await page.reload();
+  await expect(page.getByRole('button', { name: '1 2 3' })).toHaveAttribute('aria-pressed', 'true');
 });
 
 test('弱点地图会让远期历史慢错淡出颜色判断', async ({ page }) => {
