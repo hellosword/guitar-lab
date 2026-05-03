@@ -18,7 +18,7 @@ test('MVP 练习页可见并能完成一道音名题', async ({ page }) => {
   await page.goto('/');
 
   await expect(page.getByRole('heading', { name: '位置、音名、唱名反应训练' })).toBeVisible();
-  await expect(page.getByText('v0.0.12')).toBeVisible();
+  await expect(page.getByText('v0.0.13')).toBeVisible();
   await expect(page.getByRole('button', { name: 'G 大调' })).toBeVisible();
   await expect(page.getByRole('button', { name: '综合练习' })).toBeVisible();
   await expect(page.getByText('第 1 / 20 题')).toBeVisible();
@@ -94,7 +94,7 @@ test('练习记忆会按版本写入本地并跨刷新保留', async ({ page }) 
   };
 
   expect(parsedBeforeReload.schemaVersion).toBe(1);
-  expect(parsedBeforeReload.appVersion).toBe('0.0.12');
+  expect(parsedBeforeReload.appVersion).toBe('0.0.13');
   expect(parsedBeforeReload.recentEvents?.length).toBeGreaterThan(0);
   expect(Object.keys(parsedBeforeReload.masteryMap ?? {}).length).toBeGreaterThan(0);
   expect(parsedBeforeReload.recentEvents).toEqual(
@@ -122,6 +122,7 @@ test('弱点地图可以随时查看音名定位弱点', async ({ page }) => {
   await expect(page.getByRole('heading', { name: '随时查看的弱点地图' })).toBeVisible();
   await expect(page.getByText('G 大调 · 0-4 品 · 音名定位')).toBeVisible();
   await expect(page.getByText('Top 5 弱点位置')).toBeVisible();
+  await expect(page.getByText('按近期压力排序。远期历史会逐步淡出颜色判断，但仍保留在详情里。')).toBeVisible();
   await expect(page.getByText('2 弦 0 品 · B/Mi')).toBeVisible();
   await expect(page.getByText('调外误触记录')).toBeVisible();
 
@@ -130,10 +131,97 @@ test('弱点地图可以随时查看音名定位弱点', async ({ page }) => {
   await expect(page.getByText('音名/唱名：B / Mi')).toBeVisible();
 });
 
+test('弱点地图会让远期历史慢错淡出颜色判断', async ({ page }) => {
+  const createEntry = (
+    noteName: string,
+    solfeggio: string,
+    positionId: string,
+    wrongCount: number,
+    slowCount: number,
+    fastCorrectStreak: number,
+  ) => ({
+    itemKey: `note-to-position|G major|${noteName}|${solfeggio}|${positionId}`,
+    mappingKind: 'note-to-position',
+    key: 'G major',
+    noteName,
+    solfeggio,
+    positionId,
+    attempts: 10,
+    correctCount: 10 - wrongCount,
+    wrongCount,
+    slowCount,
+    ignoredCount: 0,
+    averageMs: 1600,
+    lastMs: 900,
+    recentResponseMs: [1200, 1000, 900],
+    lastSeenAt: '2026-05-03T00:00:00.000Z',
+    weaknessScore: 0,
+    fastCorrectStreak,
+  });
+  const createEvent = (id: string, itemKey: string, outcome: string, responseMs: number) => ({
+    id,
+    createdAt: '2026-05-03T00:00:00.000Z',
+    questionId: id,
+    questionType: 'note-to-positions',
+    key: 'G major',
+    mappingKind: 'note-to-position',
+    itemKey,
+    outcome,
+    responseMs,
+  });
+  const bItemKey = 'note-to-position|G major|B|Mi|2-0';
+  const dItemKey = 'note-to-position|G major|D|Sol|4-0';
+  const aItemKey = 'note-to-position|G major|A|Re|5-0';
+  const memory = {
+    schemaVersion: 1,
+    appVersion: '0.0.13',
+    createdAt: '2026-05-03T00:00:00.000Z',
+    updatedAt: '2026-05-03T00:00:00.000Z',
+    profile: { id: 'test-profile' },
+    configSnapshot: {
+      schemaVersion: 1,
+      recentWindowSize: 50,
+      minSamplesForRelativeSlow: 10,
+      slowPercentile: 0.7,
+      slowMedianMultiplier: 1.35,
+      maxValidResponseMs: 60000,
+    },
+    masteryMap: {
+      [bItemKey]: createEntry('B', 'Mi', '2-0', 3, 4, 5),
+      [dItemKey]: createEntry('D', 'Sol', '4-0', 0, 1, 0),
+      [aItemKey]: createEntry('A', 'Re', '5-0', 0, 0, 0),
+    },
+    responseGroups: {},
+    recentEvents: [
+      createEvent('event-b-1', bItemKey, 'fast-correct', 900),
+      createEvent('event-b-2', bItemKey, 'fast-correct', 850),
+      createEvent('event-b-3', bItemKey, 'fast-correct', 800),
+      createEvent('event-d-1', dItemKey, 'slow-correct', 4200),
+      createEvent('event-a-1', aItemKey, 'extra-position', 2800),
+    ],
+  };
+
+  await page.addInitScript((storedMemory) => {
+    window.localStorage.setItem('guitarLab.practiceMemory.v1', JSON.stringify(storedMemory));
+  }, memory);
+  await page.goto('/');
+
+  await page.getByRole('button', { name: '弱点地图' }).click();
+
+  await expect(page.getByText('5 弦 0 品 · A/Re')).toBeVisible();
+  await expect(page.getByText('4 弦 0 品 · D/Sol')).toBeVisible();
+  await expect(page.getByText('2 弦 0 品 · B/Mi')).toHaveCount(0);
+
+  await page.locator('g[aria-label="播放 2 弦 0 品"]').click();
+  await expect(page.getByText('状态：熟练')).toBeVisible();
+  await expect(page.getByText('近期压力：-3.0，弱点分 0')).toBeVisible();
+  await expect(page.getByText('历史慢速：4')).toBeVisible();
+});
+
 test('音名定位会从位置权重反推音名并纳入未知位置', async ({ page }) => {
   const memory = {
     schemaVersion: 1,
-    appVersion: '0.0.12',
+    appVersion: '0.0.13',
     createdAt: '2026-05-03T00:00:00.000Z',
     updatedAt: '2026-05-03T00:00:00.000Z',
     profile: { id: 'test-profile' },
@@ -193,7 +281,7 @@ test('音名定位会从位置权重反推音名并纳入未知位置', async ({
 test('音名定位动态权重会清空已出音名的覆盖压力', async ({ page }) => {
   const memory = {
     schemaVersion: 1,
-    appVersion: '0.0.12',
+    appVersion: '0.0.13',
     createdAt: '2026-05-03T00:00:00.000Z',
     updatedAt: '2026-05-03T00:00:00.000Z',
     profile: { id: 'test-profile' },
@@ -228,7 +316,7 @@ test('音名定位动态权重会清空已出音名的覆盖压力', async ({ pa
 test('音名定位会低频复查熟练位置并提示其余熟练位置', async ({ page }) => {
   const memory = {
     schemaVersion: 1,
-    appVersion: '0.0.12',
+    appVersion: '0.0.13',
     createdAt: '2026-05-03T00:00:00.000Z',
     updatedAt: '2026-05-03T00:00:00.000Z',
     profile: { id: 'test-profile' },

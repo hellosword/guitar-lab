@@ -42,6 +42,32 @@ export const ADAPTIVE_PRACTICE_CONFIG = {
       lowConfidenceAttemptCount: 3,
     },
   },
+  /**
+   * 弱点地图显示层。
+   *
+   * 地图颜色不直接使用永久累计的 wrongCount / slowCount，
+   * 而是按近期事件计算压力分，再用相对分位决定红黄位置。
+   */
+  weaknessMapDisplay: {
+    recentEventLimit: 50,
+    fullWeightEventCount: 20,
+    midWeight: 0.5,
+    pressureScore: {
+      wrong: 3,
+      missedPosition: 3,
+      extraPosition: 3,
+      slowCorrect: 1,
+      fastCorrect: -1,
+    },
+    statusRatio: {
+      dangerTopRatio: 0.2,
+      slowNextRatio: 0.3,
+    },
+    mastered: {
+      maxPressure: 0,
+      minFastCorrectStreak: 2,
+    },
+  },
 } as const;
 
 export type AdaptivePracticeConfig = typeof ADAPTIVE_PRACTICE_CONFIG;

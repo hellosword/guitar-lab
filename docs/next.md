@@ -149,3 +149,4 @@
 | 2026-05-03 | v0.0.11 | 音名定位出题调度校准：弱题比例降至 50%、普通覆盖去弱点权重、音名冷却与调外误触唱名修正 | `src/modules/fretboard-game/practiceSession.ts`、`src/modules/fretboard-game/adaptivePracticeConfig.ts`、`src/modules/fretboard-game/practiceMemory.ts`、`tests/e2e/mvp-practice.spec.ts` |
 | 2026-05-03 | 文档期 | 音名定位调度器 V2 产品规格：位置静态权重 + 本轮动态权重 + 熟练位置动态复查 | `docs/product/note-to-position-scheduler-v2-spec.md` |
 | 2026-05-03 | v0.0.12 | 音名定位调度器 V2：按位置综合权重出题、同音名动态权重清空、熟练位置动态复查 | `src/modules/fretboard-game/practiceSession.ts`、`src/modules/fretboard-game/adaptivePracticeConfig.ts`、`tests/e2e/mvp-practice.spec.ts` |
+| 2026-05-03 | v0.0.13 | 弱点地图显示校准：用近期压力分和相对分位替代永久累计慢错染色 | `src/App.tsx`、`src/modules/fretboard-game/adaptivePracticeConfig.ts`、`docs/product/adaptive-practice-memory-spec.md`、`tests/e2e/mvp-practice.spec.ts` |

@@ -824,3 +824,127 @@ B / Mi @ 2?0?     ?? 4.27s
 - ??????? / ???????
 - ??? hover ????????????
 - ????????????????????????
+
+---
+
+## 20. v0.0.13 弱点地图近期压力显示
+
+v0.0.13 对“弱点地图”的颜色判断做显示层校准。
+
+### 20.1 背景
+
+早期弱点地图直接使用永久累计字段判断颜色：
+
+```text
+wrongCount > 0 -> 易错
+slowCount > 0 -> 偏慢
+```
+
+这会导致一个问题：用户很久以前慢过或错过的位置，即使后续已经连续快速答对、`weaknessScore` 已经降回 0，地图仍然长期显示为红色或黄色。
+
+这不符合弱点地图的产品目标。弱点地图应该提示“当前最值得注意的位置”，而不是展示“永久历史罪状”。
+
+### 20.2 设计原则
+
+- 历史累计数据仍然保留，用于详情和长期分析。
+- 地图颜色只看近期事件压力。
+- 近期事件高权重，中期事件低权重，超远事件丢弃。
+- 红黄位置不使用固定绝对阈值，而使用当前地图范围内的相对分位。
+- 训练调度用的 `weaknessScore` 不受本次显示层改动影响。
+
+### 20.3 近期压力分
+
+每个位置根据最近若干条事件计算 `recentPressure`：
+
+```text
+recentPressure = sum(outcomeScore * recencyWeight)
+```
+
+事件基础分：
+
+```text
+错 / 漏 / 误点：+3
+慢速答对：+1
+快速答对：-1
+其它 / ignored：0
+```
+
+时间权重：
+
+```text
+最近 20 条该位置事件：1.0
+第 21-50 条该位置事件：0.5
+超过 50 条：不参与地图颜色
+```
+
+### 20.4 相对分位显示
+
+先筛选：
+
+```text
+recentPressure > 0
+```
+
+再在候选位置中排序：
+
+```text
+recentPressure 从高到低
+```
+
+颜色规则：
+
+```text
+前 20%：红色易错
+接下来 30%：黄色偏慢
+其它：不因历史累计直接变红黄
+```
+
+熟练规则：
+
+```text
+recentPressure <= 0
+且 fastCorrectStreak >= minFastCorrectStreak
+-> 熟练
+```
+
+`minFastCorrectStreak` 放入配置，第一版使用 2。
+
+### 20.5 配置
+
+新增配置：
+
+```ts
+weaknessMapDisplay: {
+  recentEventLimit: 50,
+  fullWeightEventCount: 20,
+  midWeight: 0.5,
+  pressureScore: {
+    wrong: 3,
+    missedPosition: 3,
+    extraPosition: 3,
+    slowCorrect: 1,
+    fastCorrect: -1,
+  },
+  statusRatio: {
+    dangerTopRatio: 0.2,
+    slowNextRatio: 0.3,
+  },
+  mastered: {
+    maxPressure: 0,
+    minFastCorrectStreak: 2,
+  },
+}
+```
+
+### 20.6 UI 文案
+
+弱点地图中的“慢/错位置”调整为“近期关注”。
+
+Top 5 弱点位置按近期压力排序，详情中同时显示：
+
+- 近期压力
+- 弱点分
+- 历史慢速次数
+- 历史错误次数
+
+这样用户能同时看到“当前要练什么”和“历史上发生过什么”，但不会被旧错误长期染红整张地图。

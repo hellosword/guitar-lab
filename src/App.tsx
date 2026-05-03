@@ -27,6 +27,7 @@ import {
   isSlowAnswer,
   PRACTICE_MODE_OPTIONS,
 } from './modules/fretboard-game/practiceSession';
+import { ADAPTIVE_PRACTICE_CONFIG } from './modules/fretboard-game/adaptivePracticeConfig';
 import { PRACTICE_INTERACTION_CONFIG } from './modules/fretboard-game/practiceInteractionConfig';
 import {
   clearPracticeMemory,
@@ -44,6 +45,7 @@ import {
   type MasteryEntryV1,
   type PracticeMemoryDocumentV1,
   type PracticeMemoryItem,
+  type PracticeOutcome,
 } from './modules/fretboard-game/practiceMemory';
 import type {
   AnswerRecord,
@@ -85,6 +87,7 @@ interface WeaknessMapEntry {
   lastMs: number | null;
   weaknessScore: number;
   fastCorrectStreak: number;
+  recentPressure: number;
   status: WeaknessStatus;
 }
 
@@ -229,23 +232,46 @@ function parsePositionId(positionId: string | undefined): FretPosition | null {
   };
 }
 
-function resolveWeaknessStatus(entry: MasteryEntryV1): WeaknessStatus {
-  if (entry.wrongCount > 0 || entry.weaknessScore >= 3) {
-    return 'danger';
+function getWeaknessMapOutcomeScore(outcome: PracticeOutcome): number {
+  const scoreConfig = ADAPTIVE_PRACTICE_CONFIG.weaknessMapDisplay.pressureScore;
+
+  if (outcome === 'wrong') {
+    return scoreConfig.wrong;
   }
 
-  if (entry.slowCount > 0 || entry.weaknessScore > 0) {
-    return 'slow';
+  if (outcome === 'missed-position') {
+    return scoreConfig.missedPosition;
   }
 
-  if (entry.fastCorrectStreak >= MASTERED_FAST_STREAK && entry.weaknessScore === 0) {
-    return 'mastered';
+  if (outcome === 'extra-position') {
+    return scoreConfig.extraPosition;
   }
 
-  return 'practiced';
+  if (outcome === 'slow-correct') {
+    return scoreConfig.slowCorrect;
+  }
+
+  if (outcome === 'fast-correct' || outcome === 'correct') {
+    return scoreConfig.fastCorrect;
+  }
+
+  return 0;
 }
 
-function toWeaknessMapEntry(entry: MasteryEntryV1): WeaknessMapEntry | null {
+function getWeaknessMapRecentPressure(memory: PracticeMemoryDocumentV1, itemKey: string): number {
+  const displayConfig = ADAPTIVE_PRACTICE_CONFIG.weaknessMapDisplay;
+  const recentEvents = memory.recentEvents
+    .filter((event) => event.itemKey === itemKey)
+    .slice(-displayConfig.recentEventLimit)
+    .reverse();
+
+  return recentEvents.reduce((sum, event, index) => {
+    const recencyWeight = index < displayConfig.fullWeightEventCount ? 1 : displayConfig.midWeight;
+    return sum + getWeaknessMapOutcomeScore(event.outcome) * recencyWeight;
+  }, 0);
+}
+
+function toWeaknessMapEntry(entry: MasteryEntryV1, memory: PracticeMemoryDocumentV1): WeaknessMapEntry | null {
   if (entry.mappingKind !== 'note-to-position' || entry.noteName === undefined) {
     return null;
   }
@@ -269,29 +295,69 @@ function toWeaknessMapEntry(entry: MasteryEntryV1): WeaknessMapEntry | null {
     lastMs: entry.lastMs,
     weaknessScore: entry.weaknessScore,
     fastCorrectStreak: entry.fastCorrectStreak,
-    status: resolveWeaknessStatus(entry),
+    recentPressure: getWeaknessMapRecentPressure(memory, entry.itemKey),
+    status: 'practiced',
   };
 }
 
+function applyWeaknessMapStatuses(entries: WeaknessMapEntry[]): WeaknessMapEntry[] {
+  const displayConfig = ADAPTIVE_PRACTICE_CONFIG.weaknessMapDisplay;
+  const pressureEntries = [...entries]
+    .filter((entry) => entry.recentPressure > 0)
+    .sort((a, b) => b.recentPressure - a.recentPressure || b.weaknessScore - a.weaknessScore);
+  const dangerCount = Math.min(
+    pressureEntries.length,
+    Math.ceil(pressureEntries.length * displayConfig.statusRatio.dangerTopRatio),
+  );
+  const slowCount = Math.min(
+    pressureEntries.length - dangerCount,
+    Math.ceil(pressureEntries.length * displayConfig.statusRatio.slowNextRatio),
+  );
+  const dangerKeys = new Set(pressureEntries.slice(0, dangerCount).map((entry) => entry.itemKey));
+  const slowKeys = new Set(pressureEntries.slice(dangerCount, dangerCount + slowCount).map((entry) => entry.itemKey));
+
+  return entries.map((entry) => {
+    if (dangerKeys.has(entry.itemKey)) {
+      return { ...entry, status: 'danger' };
+    }
+
+    if (slowKeys.has(entry.itemKey)) {
+      return { ...entry, status: 'slow' };
+    }
+
+    if (
+      entry.recentPressure <= displayConfig.mastered.maxPressure
+      && entry.fastCorrectStreak >= displayConfig.mastered.minFastCorrectStreak
+    ) {
+      return { ...entry, status: 'mastered' };
+    }
+
+    return entry;
+  });
+}
+
 function getWeaknessEntries(memory: PracticeMemoryDocumentV1, practiceKey: PracticeKey): WeaknessMapEntry[] {
-  return Object.values(memory.masteryMap)
+  const entries = Object.values(memory.masteryMap)
     .filter((entry) => entry.key === practiceKey)
-    .map(toWeaknessMapEntry)
+    .map((entry) => toWeaknessMapEntry(entry, memory))
     .filter((entry): entry is WeaknessMapEntry => entry !== null)
     .filter((entry) => isNoteInKey(entry.noteName, practiceKey));
+
+  return applyWeaknessMapStatuses(entries);
 }
 
 function getOffKeyMistakeEntries(memory: PracticeMemoryDocumentV1, practiceKey: PracticeKey): WeaknessMapEntry[] {
   return Object.values(memory.masteryMap)
     .filter((entry) => entry.key === practiceKey && entry.wrongCount > 0)
-    .map(toWeaknessMapEntry)
+    .map((entry) => toWeaknessMapEntry(entry, memory))
     .filter((entry): entry is WeaknessMapEntry => entry !== null)
     .filter((entry) => !isNoteInKey(entry.noteName, practiceKey));
 }
 
 function sortWeaknessEntries(entries: WeaknessMapEntry[]): WeaknessMapEntry[] {
   return [...entries].sort((a, b) => (
-    b.weaknessScore - a.weaknessScore
+    b.recentPressure - a.recentPressure
+      || b.weaknessScore - a.weaknessScore
       || b.wrongCount - a.wrongCount
       || b.slowCount - a.slowCount
       || (b.averageMs ?? 0) - (a.averageMs ?? 0)
@@ -1321,7 +1387,7 @@ function WeaknessMapView({ practiceKey, memory, selectedPosition, onPositionClic
   const entries = getWeaknessEntries(memory, practiceKey);
   const offKeyEntries = getOffKeyMistakeEntries(memory, practiceKey);
   const topEntries = sortWeaknessEntries(entries)
-    .filter((entry) => entry.weaknessScore > 0 || entry.wrongCount > 0 || entry.slowCount > 0)
+    .filter((entry) => entry.status === 'danger' || entry.status === 'slow')
     .slice(0, 5);
   const entryByPositionId = new Map(entries.map((entry) => [getPositionId(entry.position), entry]));
   const selectedEntry = selectedPosition === null ? null : entryByPositionId.get(getPositionId(selectedPosition)) ?? null;
@@ -1345,7 +1411,7 @@ function WeaknessMapView({ practiceKey, memory, selectedPosition, onPositionClic
               <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Weakness Map</p>
               <h2 className="mt-2 text-xl font-semibold">随时查看的弱点地图</h2>
               <p className="mt-2 text-sm leading-6 text-slate-400">
-                根据本地练习记忆展示当前调性的音名定位弱点。暖色代表偏慢，红色代表错、漏或误点；熟练位置用低调的音名颜色保留。
+                根据近期练习事件展示当前调性的音名定位压力。暖色代表近期相对更需要关注；历史慢错仍保留在详情里。
               </p>
             </div>
             <div className="rounded-md bg-black/25 px-3 py-2 text-sm text-slate-300">
@@ -1355,7 +1421,7 @@ function WeaknessMapView({ practiceKey, memory, selectedPosition, onPositionClic
 
           <div className="mt-4 grid gap-3 sm:grid-cols-3">
             <SummaryItem label="有记录位置" value={`${entries.length}`} />
-            <SummaryItem label="慢/错位置" value={`${weakCount}`} />
+            <SummaryItem label="近期关注" value={`${weakCount}`} />
             <SummaryItem label="熟练位置" value={`${masteredCount}`} />
           </div>
         </div>
@@ -1385,7 +1451,7 @@ function WeaknessMapView({ practiceKey, memory, selectedPosition, onPositionClic
         <div>
           <p className="text-sm font-semibold text-slate-200">Top 5 弱点位置</p>
           <p className="mt-1 text-sm leading-6 text-slate-500">
-            先按弱点分排序，再看错误、慢速和平均耗时。
+            按近期压力排序。远期历史会逐步淡出颜色判断，但仍保留在详情里。
           </p>
         </div>
 
@@ -1411,7 +1477,7 @@ function WeaknessMapView({ practiceKey, memory, selectedPosition, onPositionClic
                   </span>
                 </div>
                 <p className="mt-2 text-sm leading-6 text-slate-400">
-                  弱点分 {entry.weaknessScore} · 慢 {entry.slowCount} · 错 {entry.wrongCount}
+                  近期压力 {entry.recentPressure.toFixed(1)} · 弱点分 {entry.weaknessScore} · 历史慢 {entry.slowCount} · 历史错 {entry.wrongCount}
                   {entry.averageMs === null ? '' : ` · 平均 ${formatMs(entry.averageMs)}`}
                 </p>
               </button>
@@ -1436,7 +1502,8 @@ function WeaknessMapView({ practiceKey, memory, selectedPosition, onPositionClic
               <p>音名/唱名：{selectedEntry.noteName} / {selectedEntry.solfeggio}</p>
               <p>状态：{WEAKNESS_STATUS_LABELS[selectedEntry.status]}</p>
               <p>尝试：{selectedEntry.attempts}，正确 {selectedEntry.correctCount}，错误 {selectedEntry.wrongCount}</p>
-              <p>慢速：{selectedEntry.slowCount}，弱点分 {selectedEntry.weaknessScore}</p>
+              <p>近期压力：{selectedEntry.recentPressure.toFixed(1)}，弱点分 {selectedEntry.weaknessScore}</p>
+              <p>历史慢速：{selectedEntry.slowCount}</p>
               <p>
                 最近：{selectedEntry.lastMs === null ? '暂无' : formatMs(selectedEntry.lastMs)}
                 {selectedEntry.averageMs === null ? '' : `，平均 ${formatMs(selectedEntry.averageMs)}`}
