@@ -9,6 +9,11 @@ import {
   isSamePosition,
 } from '../../lib/theory';
 import type { FretPosition, PracticeKey, SharpNoteName } from '../../types/theory';
+import {
+  createPracticeItemKey,
+  getPracticeItemWeight,
+  type PracticeMemoryDocumentV1,
+} from './practiceMemory';
 import type {
   AnswerRecord,
   MvpPracticeConfig,
@@ -85,13 +90,111 @@ function pickPosition(positions: FretPosition[], index: number, focusPositions: 
   return source[(index * 11 + 3) % source.length];
 }
 
+function pickByDeterministicWeight<T>(
+  items: T[],
+  getWeight: (item: T) => number,
+  index: number,
+  salt: number,
+): T {
+  const totalWeight = items.reduce((sum, item) => sum + getWeight(item), 0);
+  const marker = ((index * salt + 17) % 100) / 100 * totalWeight;
+  let cursor = 0;
+
+  for (const item of items) {
+    cursor += getWeight(item);
+    if (marker <= cursor) {
+      return item;
+    }
+  }
+
+  return items[0];
+}
+
+function getPositionWeight(
+  memory: PracticeMemoryDocumentV1 | undefined,
+  key: PracticeKey,
+  type: MvpQuestionType,
+  position: FretPosition,
+): number {
+  if (memory === undefined) {
+    return 1;
+  }
+
+  const noteName = getNoteAtPosition(position);
+  const solfeggio = getSolfeggioInKey(noteName, key);
+
+  if (solfeggio === null) {
+    return 1;
+  }
+
+  const mappingKind = type.endsWith('note') ? 'position-to-note' : 'position-to-solfeggio';
+  return getPracticeItemWeight(
+    memory,
+    createPracticeItemKey(mappingKind, key, noteName, solfeggio, position),
+  );
+}
+
+function pickWeightedPosition(
+  positions: FretPosition[],
+  index: number,
+  focusPositions: FretPosition[],
+  config: MvpPracticeConfig,
+  type: MvpQuestionType,
+  memory?: PracticeMemoryDocumentV1,
+): FretPosition {
+  if (memory === undefined || Object.keys(memory.masteryMap).length === 0) {
+    return pickPosition(positions, index, focusPositions);
+  }
+
+  const shouldUseFocus = focusPositions.length > 0 && index % 5 === 2;
+  const source = shouldUseFocus ? focusPositions : positions;
+
+  return pickByDeterministicWeight(
+    source,
+    (position) => getPositionWeight(memory, config.key, type, position),
+    index,
+    29,
+  );
+}
+
 function resolveQuestionType(config: MvpPracticeConfig, index: number): MvpQuestionType {
   return config.modeId === 'mixed' ? pickByWeight(config.questionTypeWeights, index) : config.modeId;
 }
 
-function pickTargetNote(key: PracticeKey, index: number): SharpNoteName {
+function pickTargetNote(
+  key: PracticeKey,
+  index: number,
+  config: MvpPracticeConfig,
+  memory?: PracticeMemoryDocumentV1,
+): SharpNoteName {
   const scaleNotes = getKeySolfeggioMap(key).map((item) => item.noteName);
-  return scaleNotes[(index * 5 + 2) % scaleNotes.length];
+
+  if (memory === undefined || Object.keys(memory.masteryMap).length === 0) {
+    return scaleNotes[(index * 5 + 2) % scaleNotes.length];
+  }
+
+  return pickByDeterministicWeight(
+    scaleNotes,
+    (noteName) => {
+      const solfeggio = getSolfeggioInKey(noteName, key);
+      const notePositions = getPositionsForNote(config, noteName);
+
+      if (solfeggio === null || notePositions.length === 0) {
+        return 1;
+      }
+
+      const totalWeight = notePositions.reduce((sum, position) => (
+        sum + getPracticeItemWeight(
+          memory,
+          createPracticeItemKey('note-to-position', key, noteName, solfeggio, position),
+        )
+      ), 0);
+
+      return Math.max(1, totalWeight / notePositions.length);
+    },
+    index,
+    41,
+  );
 }
 
 function getPositionsForNote(config: MvpPracticeConfig, noteName: SharpNoteName): FretPosition[] {
@@ -104,7 +207,7 @@ function getPositionsForNote(config: MvpPracticeConfig, noteName: SharpNoteName)
   ).filter((position) => getNoteAtPosition(position) === noteName);
 }
 
-export function createQuestion(config: MvpPracticeConfig, index: number): MvpQuestion {
+export function createQuestion(config: MvpPracticeConfig, index: number, memory?: PracticeMemoryDocumentV1): MvpQuestion {
   const [minFret, maxFret] = config.fretRange;
   const [minString, maxString] = config.stringRange;
   const positions = getPositionsInKey(
@@ -113,17 +216,17 @@ export function createQuestion(config: MvpPracticeConfig, index: number): MvpQue
     { min: minString as 1, max: maxString as 6 },
   );
   const focusPositions = positions.filter((position) => isGKeyFocusNote(position, config.key));
-  const position = pickPosition(positions, index, focusPositions);
+  const type = resolveQuestionType(config, index);
+  const position = pickWeightedPosition(positions, index, focusPositions, config, type, memory);
   const noteName = getNoteAtPosition(position);
   const solfeggio = getSolfeggioInKey(noteName, config.key);
-  const type = resolveQuestionType(config, index);
 
   if (solfeggio === null) {
     throw new Error(`位置 ${getPositionId(position)} 不属于 ${config.key}`);
   }
 
   if (type === 'note-to-positions') {
-    const targetNoteName = pickTargetNote(config.key, index);
+    const targetNoteName = pickTargetNote(config.key, index, config, memory);
     const targetSolfeggio = getSolfeggioInKey(targetNoteName, config.key);
     const targetPositions = getPositionsForNote(config, targetNoteName);
 
@@ -166,8 +269,8 @@ export function createQuestion(config: MvpPracticeConfig, index: number): MvpQue
   };
 }
 
-export function createQuestionSet(config: MvpPracticeConfig): MvpQuestion[] {
-  return Array.from({ length: config.questionCount }, (_, index) => createQuestion(config, index));
+export function createQuestionSet(config: MvpPracticeConfig, memory?: PracticeMemoryDocumentV1): MvpQuestion[] {
+  return Array.from({ length: config.questionCount }, (_, index) => createQuestion(config, index, memory));
 }
 
 export function isSlowAnswer(question: MvpQuestion, responseMs: number): boolean {

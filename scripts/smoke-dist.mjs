@@ -17,6 +17,17 @@ async function fetchText(pathname) {
   return response.text();
 }
 
+async function postJson(pathname, body) {
+  const response = await fetch(`${baseUrl}${pathname}`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+  assert(response.ok, `${pathname} POST 请求失败：${response.status}`);
+}
+
 async function main() {
   assert(existsSync('dist/index.html'), 'dist/index.html 不存在，请先运行 npm run build');
 
@@ -44,7 +55,17 @@ async function main() {
     const htmlOnDisk = readFileSync('dist/index.html', 'utf8');
     assert(htmlOnDisk.includes('assets/'), 'dist/index.html 未引用 assets 目录');
 
-    console.log('Smoke test passed: dist 可静态访问，首页、资源和 manifest 均正常。');
+    const devPracticeData = {
+      schemaVersion: 1,
+      appVersion: 'smoke',
+      masteryMap: {},
+      recentEvents: [],
+    };
+    await postJson('/__dev/practice-data', devPracticeData);
+    const devPracticeDataText = await fetchText('/__dev/practice-data');
+    assert(devPracticeDataText.includes('"appVersion":"smoke"'), '开发期练习数据接口未能正常读写');
+
+    console.log('Smoke test passed: dist 可静态访问，首页、资源、manifest 和开发期数据接口均正常。');
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }

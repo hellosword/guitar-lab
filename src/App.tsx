@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { APP_VERSION } from './appVersion';
 import Fretboard from './components/Fretboard';
 import type { FretboardPositionLabel, FretboardPositionState } from './components/Fretboard';
@@ -27,6 +27,22 @@ import {
   isSlowAnswer,
   PRACTICE_MODE_OPTIONS,
 } from './modules/fretboard-game/practiceSession';
+import {
+  clearPracticeMemory,
+  createPositionPracticeItem,
+  createPracticeMemoryFileName,
+  createQuestionPracticeItem,
+  createPracticeItemKey,
+  exportPracticeMemory,
+  getPracticeMemoryHighlights,
+  loadPracticeMemory,
+  parsePracticeMemoryJson,
+  recordPracticeMemoryItems,
+  savePracticeMemory,
+  syncPracticeMemoryToDevServer,
+  type PracticeMemoryDocumentV1,
+  type PracticeMemoryItem,
+} from './modules/fretboard-game/practiceMemory';
 import type {
   AnswerRecord,
   MvpPracticeConfig,
@@ -81,8 +97,24 @@ function getPositionStatsKey(question: MvpQuestion, position: FretPosition): str
   return `${question.key}|${question.type}|${question.noteName}|${getPositionId(position)}`;
 }
 
-function isPositionMastered(stats: PositionPracticeStats | undefined): boolean {
-  return stats !== undefined && stats.correctFastStreak >= MASTERED_FAST_STREAK;
+function getPositionMemoryKey(question: MvpQuestion, position: FretPosition): string {
+  return createPracticeItemKey('note-to-position', question.key, question.noteName, question.solfeggio, position);
+}
+
+function isPositionMastered(
+  stats: PositionPracticeStats | undefined,
+  memory: PracticeMemoryDocumentV1,
+  question: MvpQuestion,
+  position: FretPosition,
+): boolean {
+  if (stats !== undefined && stats.correctFastStreak >= MASTERED_FAST_STREAK) {
+    return true;
+  }
+
+  const memoryEntry = memory.masteryMap[getPositionMemoryKey(question, position)];
+  return memoryEntry !== undefined
+    && memoryEntry.fastCorrectStreak >= MASTERED_FAST_STREAK
+    && memoryEntry.weaknessScore === 0;
 }
 
 function getPositionsToClick(question: MvpQuestion, masteredPositions: FretPosition[]): FretPosition[] {
@@ -165,7 +197,8 @@ function App() {
   const [selectedMemoryPosition, setSelectedMemoryPosition] = useState<FretPosition | null>(null);
   const [hoveredMemoryNote, setHoveredMemoryNote] = useState<SharpNoteName | null>(null);
   const [config, setConfig] = useState<MvpPracticeConfig>(DEFAULT_MVP_CONFIG);
-  const [questions, setQuestions] = useState<MvpQuestion[]>(() => createQuestionSet(DEFAULT_MVP_CONFIG));
+  const [practiceMemory, setPracticeMemory] = useState<PracticeMemoryDocumentV1>(() => loadPracticeMemory());
+  const [questions, setQuestions] = useState<MvpQuestion[]>(() => createQuestionSet(DEFAULT_MVP_CONFIG, practiceMemory));
   const [currentIndex, setCurrentIndex] = useState(0);
   const [records, setRecords] = useState<AnswerRecord[]>([]);
   const [answeredRecord, setAnsweredRecord] = useState<AnswerRecord | null>(null);
@@ -174,11 +207,17 @@ function App() {
   const [positionPracticeStats, setPositionPracticeStats] = useState<Record<string, PositionPracticeStats>>({});
   const [questionStartedAt, setQuestionStartedAt] = useState(() => performance.now());
   const [positionStartedAt, setPositionStartedAt] = useState(() => performance.now());
+  const importInputRef = useRef<HTMLInputElement | null>(null);
 
   const currentQuestion = questions[currentIndex];
   const isFinished = currentIndex >= questions.length;
   const summary = useMemo(() => createPracticeSummary(records), [records]);
+  const memoryHighlights = useMemo(() => getPracticeMemoryHighlights(practiceMemory), [practiceMemory]);
   const positionsToClick = currentQuestion === undefined ? [] : getPositionsToClick(currentQuestion, masteredAnswerPositions);
+
+  useEffect(() => {
+    savePracticeMemory(practiceMemory);
+  }, [practiceMemory]);
 
   useEffect(() => {
     if (currentQuestion === undefined) {
@@ -197,12 +236,12 @@ function App() {
     }
 
     const masteredPositions = currentQuestion.targetPositions.filter((position) => (
-      isPositionMastered(positionPracticeStats[getPositionStatsKey(currentQuestion, position)])
+      isPositionMastered(positionPracticeStats[getPositionStatsKey(currentQuestion, position)], practiceMemory, currentQuestion, position)
     ));
 
     setMasteredAnswerPositions(masteredPositions.length === currentQuestion.targetPositions.length ? [] : masteredPositions);
     setPositionStartedAt(performance.now());
-  }, [currentQuestion?.id]);
+  }, [currentQuestion?.id, practiceMemory]);
 
   function restartPractice(nextKey = config.key, nextModeId = config.modeId): void {
     const nextConfig = {
@@ -212,7 +251,7 @@ function App() {
       fretRange: getDefaultFretRangeForKey(nextKey),
     };
     setConfig(nextConfig);
-    setQuestions(createQuestionSet(nextConfig));
+    setQuestions(createQuestionSet(nextConfig, practiceMemory));
     setCurrentIndex(0);
     setRecords([]);
     setAnsweredRecord(null);
@@ -262,15 +301,24 @@ function App() {
     setRecords((previous) => [...previous, record]);
 
     if (currentQuestion.answerKind === 'positions') {
+      const memoryItems: PracticeMemoryItem[] = [];
+
       for (const missedPosition of missedPositions) {
         updatePositionPracticeStats(currentQuestion, missedPosition, false, responseMs);
+        memoryItems.push(createPositionPracticeItem(currentQuestion, missedPosition, false, null, 'missed-position'));
       }
 
       for (const extraPosition of extraPositions) {
         updatePositionPracticeStats(currentQuestion, extraPosition, false, responseMs);
+        memoryItems.push(createPositionPracticeItem(currentQuestion, extraPosition, false, responseMs, 'extra-position'));
+      }
+
+      if (memoryItems.length > 0) {
+        applyPracticeMemoryItems(memoryItems);
       }
     } else {
       updatePositionPracticeStats(currentQuestion, currentQuestion.position, record.isCorrect, responseMs);
+      applyPracticeMemoryItems([createQuestionPracticeItem(currentQuestion, record.isCorrect, responseMs)]);
     }
   }
 
@@ -309,7 +357,9 @@ function App() {
     }
 
     const now = performance.now();
-    updatePositionPracticeStats(currentQuestion, position, true, Math.round(now - positionStartedAt));
+    const positionResponseMs = Math.round(now - positionStartedAt);
+    updatePositionPracticeStats(currentQuestion, position, true, positionResponseMs);
+    applyPracticeMemoryItems([createPositionPracticeItem(currentQuestion, position, true, positionResponseMs, 'missed-position')]);
     setPositionStartedAt(now);
 
     const nextSelectedPositions = [...selectedAnswerPositions, position];
@@ -360,6 +410,58 @@ function App() {
         },
       };
     });
+  }
+
+  function applyPracticeMemoryItems(items: PracticeMemoryItem[]): void {
+    setPracticeMemory((previous) => {
+      const nextMemory = recordPracticeMemoryItems(previous, items);
+      savePracticeMemory(nextMemory);
+      syncPracticeMemoryToDevServer(nextMemory);
+      return nextMemory;
+    });
+  }
+
+  function resetPracticeWithMemory(nextMemory: PracticeMemoryDocumentV1): void {
+    setQuestions(createQuestionSet(config, nextMemory));
+    setCurrentIndex(0);
+    setRecords([]);
+    setAnsweredRecord(null);
+    setSelectedAnswerPositions([]);
+    setMasteredAnswerPositions([]);
+    setPositionPracticeStats({});
+    setQuestionStartedAt(performance.now());
+    setPositionStartedAt(performance.now());
+  }
+
+  function handleExportPracticeMemory(): void {
+    const blob = new Blob([exportPracticeMemory(practiceMemory)], { type: 'application/json;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = createPracticeMemoryFileName();
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function handleImportPracticeMemoryFile(file: File): void {
+    file.text()
+      .then((text) => {
+        const importedMemory = parsePracticeMemoryJson(text);
+        savePracticeMemory(importedMemory);
+        syncPracticeMemoryToDevServer(importedMemory);
+        setPracticeMemory(importedMemory);
+        resetPracticeWithMemory(importedMemory);
+      })
+      .catch(() => {
+        window.alert('练习数据导入失败，请确认 JSON 文件来自 Guitar Lab。');
+      });
+  }
+
+  function handleClearPracticeMemory(): void {
+    const nextMemory = clearPracticeMemory();
+    syncPracticeMemoryToDevServer(nextMemory);
+    setPracticeMemory(nextMemory);
+    resetPracticeWithMemory(nextMemory);
   }
 
   function goToNextQuestion(): void {
@@ -488,6 +590,63 @@ function App() {
                   </div>
                 </div>
               )}
+
+              {memoryHighlights.length > 0 && (
+                <div className="mt-5 rounded-md border border-guitar-accent/30 bg-guitar-accent/10 p-4">
+                  <p className="text-sm font-semibold text-slate-100">本轮重点</p>
+                  <div className="mt-3 space-y-2">
+                    {memoryHighlights.map((highlight) => (
+                      <p key={highlight.itemKey} className="text-sm leading-6 text-slate-300">
+                        {highlight.label}：弱点分 {highlight.weaknessScore}
+                        {highlight.responseMs === null ? '' : `，最近 ${formatMs(highlight.responseMs)}`}
+                      </p>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="mt-5 rounded-md bg-black/20 p-4">
+                <p className="text-sm font-semibold text-slate-200">练习数据</p>
+                <p className="mt-2 text-sm leading-6 text-slate-400">
+                  数据保存在本机浏览器中，也可以导出 JSON 备份或交给 Codex 分析。
+                </p>
+                <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                  <button
+                    type="button"
+                    onClick={handleExportPracticeMemory}
+                    className="h-10 rounded-md border border-white/15 bg-white/10 text-sm font-semibold text-slate-100 transition hover:bg-white/20"
+                  >
+                    导出 JSON
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => importInputRef.current?.click()}
+                    className="h-10 rounded-md border border-white/15 bg-white/10 text-sm font-semibold text-slate-100 transition hover:bg-white/20"
+                  >
+                    导入 JSON
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleClearPracticeMemory}
+                    className="h-10 rounded-md border border-rose-300/30 bg-rose-400/10 text-sm font-semibold text-rose-100 transition hover:bg-rose-400/20"
+                  >
+                    清空记忆
+                  </button>
+                </div>
+                <input
+                  ref={importInputRef}
+                  type="file"
+                  accept="application/json,.json"
+                  className="hidden"
+                  onChange={(event) => {
+                    const file = event.currentTarget.files?.[0];
+                    event.currentTarget.value = '';
+                    if (file !== undefined) {
+                      handleImportPracticeMemoryFile(file);
+                    }
+                  }}
+                />
+              </div>
 
               <button
                 type="button"

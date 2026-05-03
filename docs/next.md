@@ -139,3 +139,4 @@
 | 2026-05-02 | 文档期 | 前端项目基础概念入门文档 | `docs/knowledge/frontend-project-basics-for-beginners.md` |
 | 2026-05-02 | 文档期 | 前端项目基础概念入门文档重构：增加游戏开发/Python 类比与拓扑顺序 | `docs/knowledge/frontend-project-basics-for-beginners.md` |
 | 2026-05-03 | 文档期 | 自适应练习记忆系统规格 | `docs/product/adaptive-practice-memory-spec.md` |
+| 2026-05-03 | v0.0.4 | 自适应练习记忆 MVP：版本化数据、位置级记录、弱点加权、导入导出、开发期同步 | `src/modules/fretboard-game/practiceMemory.ts`、`src/modules/fretboard-game/adaptivePracticeConfig.ts`、`src/App.tsx`、`scripts/static-preview.mjs` |
