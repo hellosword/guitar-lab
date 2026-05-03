@@ -55,6 +55,7 @@ import type { FretPosition, PracticeKey, SharpNoteName } from './types/theory';
 const KEY_OPTIONS: PracticeKey[] = ['G major', 'C major'];
 const FAST_POSITION_RESPONSE_MS = 2500;
 const MASTERED_FAST_STREAK = 2;
+const POSITION_HUNT_AUTO_ADVANCE_MS = 800;
 type AppView = 'practice' | 'memory';
 type FretboardMarkerMode = 'note' | 'solfeggio';
 
@@ -208,6 +209,7 @@ function App() {
   const [questionStartedAt, setQuestionStartedAt] = useState(() => performance.now());
   const [positionStartedAt, setPositionStartedAt] = useState(() => performance.now());
   const importInputRef = useRef<HTMLInputElement | null>(null);
+  const autoAdvanceTimeoutRef = useRef<number | null>(null);
 
   const currentQuestion = questions[currentIndex];
   const isFinished = currentIndex >= questions.length;
@@ -218,6 +220,12 @@ function App() {
   useEffect(() => {
     savePracticeMemory(practiceMemory);
   }, [practiceMemory]);
+
+  useEffect(() => () => {
+    if (autoAdvanceTimeoutRef.current !== null) {
+      window.clearTimeout(autoAdvanceTimeoutRef.current);
+    }
+  }, []);
 
   useEffect(() => {
     if (currentQuestion === undefined) {
@@ -244,6 +252,7 @@ function App() {
   }, [currentQuestion?.id]);
 
   function restartPractice(nextKey = config.key, nextModeId = config.modeId): void {
+    cancelAutoAdvance();
     const nextConfig = {
       ...config,
       modeId: nextModeId,
@@ -326,6 +335,21 @@ function App() {
     completeAnswer(userAnswer);
   }
 
+  function cancelAutoAdvance(): void {
+    if (autoAdvanceTimeoutRef.current !== null) {
+      window.clearTimeout(autoAdvanceTimeoutRef.current);
+      autoAdvanceTimeoutRef.current = null;
+    }
+  }
+
+  function scheduleAutoAdvance(): void {
+    cancelAutoAdvance();
+    autoAdvanceTimeoutRef.current = window.setTimeout(() => {
+      autoAdvanceTimeoutRef.current = null;
+      goToNextQuestion();
+    }, POSITION_HUNT_AUTO_ADVANCE_MS);
+  }
+
   function handlePositionAnswerClick(position: FretPosition): void {
     if (answeredRecord !== null || currentQuestion === undefined || currentQuestion.answerKind !== 'positions') {
       return;
@@ -352,6 +376,7 @@ function App() {
     const isTargetPosition = positionsToClick.some((targetPosition) => isSamePosition(targetPosition, position));
 
     if (!isTargetPosition) {
+      cancelAutoAdvance();
       completeAnswer([...masteredAnswerPositions, ...selectedAnswerPositions, position]);
       return;
     }
@@ -367,7 +392,7 @@ function App() {
 
     if (getMissingPositions(positionsToClick, nextSelectedPositions).length === 0) {
       completeAnswer([...masteredAnswerPositions, ...nextSelectedPositions]);
-      goToNextQuestion();
+      scheduleAutoAdvance();
     }
   }
 
@@ -423,6 +448,7 @@ function App() {
   }
 
   function resetPracticeWithMemory(nextMemory: PracticeMemoryDocumentV1): void {
+    cancelAutoAdvance();
     setQuestions(createQuestionSet(config, nextMemory));
     setCurrentIndex(0);
     setRecords([]);
@@ -466,6 +492,7 @@ function App() {
   }
 
   function goToNextQuestion(): void {
+    cancelAutoAdvance();
     const nextIndex = currentIndex + 1;
     setCurrentIndex(nextIndex);
     setAnsweredRecord(null);
