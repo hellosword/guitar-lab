@@ -7,19 +7,20 @@
  */
 export const PRACTICE_INTERACTION_CONFIG = {
   /**
-   * 音名定位题在全部点对之后，自动进入下一题前等待的时间。
+   * 任意题型答对后，自动进入下一题前等待的时间。
    *
    * 设计目的：
-   * - 让最后一个正确位置的对钩有时间被看见。
-   * - 让用户点击位置时播放的音高先响出来。
-   * - 避免下一题的自动提示音和最后一次点击音几乎重叠。
+   * - 让正确反馈有时间被看见。
+   * - 让用户本次点击触发的音高先响出来。
+   * - 避免下一题的自动提示音和本题音高几乎重叠。
    *
    * 调参建议：
    * - 500ms 以下会显得太急，容易看不到最后反馈。
-   * - 800ms 当前比较像一个短确认拍。
+   * - 600ms 当前更适合连续刷题，仍能看到短确认反馈。
+   * - 800ms 会更稳，但节奏略慢。
    * - 1200ms 以上会更稳，但连续刷题节奏会变慢。
    */
-  positionHuntAutoAdvanceMs: 800,
+  correctAnswerAutoAdvanceMs: 600,
 } as const;
 
 export type PracticeInteractionConfig = typeof PRACTICE_INTERACTION_CONFIG;

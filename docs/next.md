@@ -107,3 +107,5 @@
 | 2026-05-03 | v0.0.13 | 弱点地图显示校准：用近期压力分和相对分位替代永久累计慢错染色 | `src/App.tsx`、`src/modules/fretboard-game/adaptivePracticeConfig.ts`、`docs/product/adaptive-practice-memory-spec.md`、`tests/e2e/mvp-practice.spec.ts` |
 | 2026-05-03 | v0.0.14 | 全局唱名显示模式：支持 Do/Re/Mi 与 1/2/3，并同步影响练习、反馈、指板记忆、映射面板和弱点地图 | `src/lib/solfeggioDisplay.ts`、`src/App.tsx`、`src/components/SolfeggioSelector/index.tsx`、`tests/e2e/mvp-practice.spec.ts` |
 | 2026-05-03 | v0.0.15 | 练习页统一题目/作答布局：所有单选题答案区移到题面下方，右侧保留详情、播放、反馈和统计 | `src/App.tsx`、`tests/e2e/mvp-practice.spec.ts` |
+| 2026-05-03 | v0.0.16 | 练习节奏统一优化：所有题型答对后短暂停顿自动下一题，并移除六线谱题额外重复的指板位置面板 | `src/App.tsx`、`src/modules/fretboard-game/practiceInteractionConfig.ts`、`tests/e2e/mvp-practice.spec.ts` |
+| 2026-05-03 | v0.0.17 | 答对自动进入下一题节奏调优：延迟从 800ms 缩短到 600ms | `src/modules/fretboard-game/practiceInteractionConfig.ts` |

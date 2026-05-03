@@ -542,6 +542,10 @@ function App() {
       updatePositionPracticeStats(currentQuestion, currentQuestion.position, record.isCorrect, responseMs);
       applyPracticeMemoryItems([createQuestionPracticeItem(currentQuestion, record.isCorrect, responseMs)]);
     }
+
+    if (record.isCorrect) {
+      scheduleAutoAdvance();
+    }
   }
 
   function handleAnswer(userAnswer: PracticeAnswerValue): void {
@@ -560,7 +564,7 @@ function App() {
     autoAdvanceTimeoutRef.current = window.setTimeout(() => {
       autoAdvanceTimeoutRef.current = null;
       goToNextQuestion();
-    }, PRACTICE_INTERACTION_CONFIG.positionHuntAutoAdvanceMs);
+    }, PRACTICE_INTERACTION_CONFIG.correctAnswerAutoAdvanceMs);
   }
 
   function handlePositionAnswerClick(position: FretPosition): void {
@@ -605,7 +609,6 @@ function App() {
 
     if (getMissingPositions(positionsToClick, nextSelectedPositions).length === 0) {
       completeAnswer([...masteredAnswerPositions, ...nextSelectedPositions]);
-      scheduleAutoAdvance();
     }
   }
 
@@ -991,17 +994,6 @@ function App() {
                       positionStates={getAnswerPositionStates(currentQuestion, selectedAnswerPositions, answeredRecord)}
                       getPositionLabel={(position) => getMasteredPositionLabel(currentQuestion, masteredAnswerPositions, position)}
                       onPositionClick={handlePositionAnswerClick}
-                    />
-                  </div>
-                )}
-
-                {currentQuestion.sourceMedium === 'tab' && (
-                  <div className="rounded-lg border border-white/10 bg-white/10 p-4">
-                    <p className="mb-3 text-sm text-slate-400">对应指板位置</p>
-                    <Fretboard
-                      fretCount={config.fretRange[1]}
-                      highlightedPosition={currentQuestion.position}
-                      onPositionClick={playFretboardPosition}
                     />
                   </div>
                 )}
