@@ -145,3 +145,4 @@
 | 2026-05-03 | v0.0.7 | 音名定位题锁定开题时的预提示集合，避免点击后突然出现已掌握标记 | `src/App.tsx`、`tests/e2e/mvp-practice.spec.ts` |
 | 2026-05-03 | v0.0.8 | 音名定位全对后延迟自动进入下一题，保留最后对钩并避免音频重叠 | `src/App.tsx`、`tests/e2e/mvp-practice.spec.ts` |
 | 2026-05-03 | v0.0.9 | 随时可打开的弱点地图：指板热度、Top 5 弱点、调外误触与位置详情 | `src/App.tsx`、`tests/e2e/mvp-practice.spec.ts` |
+| 2026-05-03 | v0.0.10 | 音名定位按弱位置加权出题：从弱位置反推音名，并提示同音名非弱位置 | `src/modules/fretboard-game/practiceSession.ts`、`src/App.tsx`、`tests/e2e/mvp-practice.spec.ts` |

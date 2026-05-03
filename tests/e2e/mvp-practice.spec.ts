@@ -18,7 +18,7 @@ test('MVP 练习页可见并能完成一道音名题', async ({ page }) => {
   await page.goto('/');
 
   await expect(page.getByRole('heading', { name: '位置、音名、唱名反应训练' })).toBeVisible();
-  await expect(page.getByText('v0.0.9')).toBeVisible();
+  await expect(page.getByText('v0.0.10')).toBeVisible();
   await expect(page.getByRole('button', { name: 'G 大调' })).toBeVisible();
   await expect(page.getByRole('button', { name: '综合练习' })).toBeVisible();
   await expect(page.getByText('第 1 / 20 题')).toBeVisible();
@@ -94,7 +94,7 @@ test('练习记忆会按版本写入本地并跨刷新保留', async ({ page }) 
   };
 
   expect(parsedBeforeReload.schemaVersion).toBe(1);
-  expect(parsedBeforeReload.appVersion).toBe('0.0.9');
+  expect(parsedBeforeReload.appVersion).toBe('0.0.10');
   expect(parsedBeforeReload.recentEvents?.length).toBeGreaterThan(0);
   expect(Object.keys(parsedBeforeReload.masteryMap ?? {}).length).toBeGreaterThan(0);
   expect(parsedBeforeReload.recentEvents).toEqual(
@@ -130,6 +130,64 @@ test('弱点地图可以随时查看音名定位弱点', async ({ page }) => {
   await expect(page.getByText('音名/唱名：B / Mi')).toBeVisible();
 });
 
+test('音名定位会从弱位置反推音名并提示同音名非弱位置', async ({ page }) => {
+  const memory = {
+    schemaVersion: 1,
+    appVersion: '0.0.10',
+    createdAt: '2026-05-03T00:00:00.000Z',
+    updatedAt: '2026-05-03T00:00:00.000Z',
+    profile: { id: 'test-profile' },
+    configSnapshot: {
+      schemaVersion: 1,
+      recentWindowSize: 50,
+      minSamplesForRelativeSlow: 10,
+      slowPercentile: 0.7,
+      slowMedianMultiplier: 1.35,
+      maxValidResponseMs: 60000,
+    },
+    masteryMap: {
+      'note-to-position|G major|B|Mi|5-2': {
+        itemKey: 'note-to-position|G major|B|Mi|5-2',
+        mappingKind: 'note-to-position',
+        key: 'G major',
+        noteName: 'B',
+        solfeggio: 'Mi',
+        positionId: '5-2',
+        attempts: 1,
+        correctCount: 0,
+        wrongCount: 1,
+        slowCount: 0,
+        ignoredCount: 0,
+        averageMs: 3200,
+        lastMs: 3200,
+        recentResponseMs: [3200],
+        lastSeenAt: '2026-05-03T00:00:00.000Z',
+        weaknessScore: 3,
+        fastCorrectStreak: 0,
+      },
+    },
+    responseGroups: {},
+    recentEvents: [],
+  };
+
+  await page.addInitScript((storedMemory) => {
+    window.localStorage.setItem('guitarLab.practiceMemory.v1', JSON.stringify(storedMemory));
+  }, memory);
+  await page.goto('/');
+
+  await page.getByRole('button', { name: '音名定位' }).click();
+
+  await expect(page.getByText('在0-4 品内找出所有 B')).toBeVisible();
+  await expect(page.getByText('已找到 0 / 1')).toBeVisible();
+  await expect(page.getByText('已提示的 2 个位置已用音名圆点标出。')).toBeVisible();
+  await expect(page.locator('g[aria-label="播放 2 弦 0 品"] text')).toHaveText('B');
+  await expect(page.locator('g[aria-label="播放 3 弦 4 品"] text')).toHaveText('B');
+  await expect(page.locator('g[aria-label="播放 5 弦 2 品"] text')).toHaveCount(0);
+
+  await page.locator('g[aria-label="播放 5 弦 2 品"]').click();
+  await expect(page.locator('g[aria-label="播放 5 弦 2 品"] text')).toHaveText('✓');
+});
+
 test('音名定位会把本轮已掌握位置预标成音名提示', async ({ page }) => {
   await page.goto('/');
 
@@ -147,7 +205,7 @@ test('音名定位会把本轮已掌握位置预标成音名提示', async ({ pa
   }
 
   await expect(page.getByText('已找到 0 / 1')).toBeVisible();
-  await expect(page.getByText('已掌握的 2 个位置已用音名圆点提示。')).toBeVisible();
+  await expect(page.getByText('已提示的 2 个位置已用音名圆点标出。')).toBeVisible();
   await expect(page.locator('g[aria-label="播放 2 弦 0 品"] text')).toHaveText('B');
   await expect(page.locator('g[aria-label="播放 5 弦 2 品"] text')).toHaveText('B');
 

@@ -352,6 +352,16 @@ function App() {
       return;
     }
 
+    if (currentQuestion.assistedPositions !== undefined) {
+      setMasteredAnswerPositions(
+        currentQuestion.assistedPositions.length === currentQuestion.targetPositions.length
+          ? []
+          : currentQuestion.assistedPositions,
+      );
+      setPositionStartedAt(performance.now());
+      return;
+    }
+
     const masteredPositions = currentQuestion.targetPositions.filter((position) => (
       isPositionMastered(positionPracticeStats[getPositionStatsKey(currentQuestion, position)], practiceMemory, currentQuestion, position)
     ));
@@ -1010,7 +1020,7 @@ function PositionHuntPanel({ foundCount, targetCount, masteredCount, isComplete 
       </p>
       {masteredCount > 0 && (
         <p className="mt-2 text-sm leading-6 text-slate-400">
-          已掌握的 {masteredCount} 个位置已用音名圆点提示。
+          已提示的 {masteredCount} 个位置已用音名圆点标出。
         </p>
       )}
       <p className="mt-2 text-sm leading-6 text-slate-500">

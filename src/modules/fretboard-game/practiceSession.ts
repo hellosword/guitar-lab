@@ -14,6 +14,7 @@ import {
   getPracticeItemWeight,
   type PracticeMemoryDocumentV1,
 } from './practiceMemory';
+import { ADAPTIVE_PRACTICE_CONFIG } from './adaptivePracticeConfig';
 import type {
   AnswerRecord,
   MvpPracticeConfig,
@@ -197,6 +198,70 @@ function pickTargetNote(
   );
 }
 
+function getNoteToPositionWeight(
+  memory: PracticeMemoryDocumentV1 | undefined,
+  key: PracticeKey,
+  position: FretPosition,
+): number {
+  if (memory === undefined) {
+    return 1;
+  }
+
+  const noteName = getNoteAtPosition(position);
+  const solfeggio = getSolfeggioInKey(noteName, key);
+
+  if (solfeggio === null) {
+    return 1;
+  }
+
+  return getPracticeItemWeight(
+    memory,
+    createPracticeItemKey('note-to-position', key, noteName, solfeggio, position),
+  );
+}
+
+function pickWeakTargetPosition(
+  config: MvpPracticeConfig,
+  index: number,
+  memory?: PracticeMemoryDocumentV1,
+): FretPosition | null {
+  const shouldKeepBroadCoverage = index % ADAPTIVE_PRACTICE_CONFIG.noteToPositionTargeting.weakFocusCycleSize
+    === ADAPTIVE_PRACTICE_CONFIG.noteToPositionTargeting.broadCoverageRemainder;
+
+  if (memory === undefined || Object.keys(memory.masteryMap).length === 0 || shouldKeepBroadCoverage) {
+    return null;
+  }
+
+  const [minFret, maxFret] = config.fretRange;
+  const [minString, maxString] = config.stringRange;
+  const weakPositions = getPositionsInKey(
+    config.key,
+    { min: minFret, max: maxFret },
+    { min: minString as 1, max: maxString as 6 },
+  ).filter((position) => getNoteToPositionWeight(memory, config.key, position) > 1);
+
+  if (weakPositions.length === 0) {
+    return null;
+  }
+
+  return pickByDeterministicWeight(
+    weakPositions,
+    (position) => getNoteToPositionWeight(memory, config.key, position),
+    index,
+    53,
+  );
+}
+
+function getAssistedPositionsForWeakNote(
+  config: MvpPracticeConfig,
+  targetPositions: FretPosition[],
+  memory?: PracticeMemoryDocumentV1,
+): FretPosition[] {
+  return targetPositions.filter((position) => (
+    getNoteToPositionWeight(memory, config.key, position) <= 1
+  ));
+}
+
 function getPositionsForNote(config: MvpPracticeConfig, noteName: SharpNoteName): FretPosition[] {
   const [minFret, maxFret] = config.fretRange;
   const [minString, maxString] = config.stringRange;
@@ -226,9 +291,15 @@ export function createQuestion(config: MvpPracticeConfig, index: number, memory?
   }
 
   if (type === 'note-to-positions') {
-    const targetNoteName = pickTargetNote(config.key, index, config, memory);
+    const weakTargetPosition = pickWeakTargetPosition(config, index, memory);
+    const targetNoteName = weakTargetPosition === null
+      ? pickTargetNote(config.key, index, config, memory)
+      : getNoteAtPosition(weakTargetPosition);
     const targetSolfeggio = getSolfeggioInKey(targetNoteName, config.key);
     const targetPositions = getPositionsForNote(config, targetNoteName);
+    const assistedPositions = weakTargetPosition === null
+      ? undefined
+      : getAssistedPositionsForWeakNote(config, targetPositions, memory);
 
     if (targetSolfeggio === null || targetPositions.length === 0) {
       throw new Error(`${config.key} 的 ${targetNoteName} 在当前范围内没有可用位置`);
@@ -238,15 +309,17 @@ export function createQuestion(config: MvpPracticeConfig, index: number, memory?
       id: `${type}-${config.key}-${targetNoteName}-${index}`,
       type,
       key: config.key,
-      position: targetPositions[0],
+      position: weakTargetPosition ?? targetPositions[0],
       noteName: targetNoteName,
       solfeggio: targetSolfeggio,
       answer: targetPositions,
       targetPositions,
+      assistedPositions,
       prompt: QUESTION_PROMPTS[type],
       answerKind: 'positions',
       sourceMedium: 'note',
       isFocusNote: config.key === 'G major' && targetNoteName === 'F#',
+      isWeakFocus: weakTargetPosition !== null,
     };
   }
 

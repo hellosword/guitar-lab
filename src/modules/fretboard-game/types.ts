@@ -31,10 +31,12 @@ export interface MvpQuestion {
   solfeggio: Solfeggio;
   answer: PracticeAnswerValue;
   targetPositions: FretPosition[];
+  assistedPositions?: FretPosition[];
   prompt: string;
   answerKind: 'note' | 'solfeggio' | 'positions';
   sourceMedium: 'board' | 'tab' | 'note';
   isFocusNote: boolean;
+  isWeakFocus?: boolean;
 }
 
 export interface AnswerRecord {
