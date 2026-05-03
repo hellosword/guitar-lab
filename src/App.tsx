@@ -41,6 +41,7 @@ import {
   recordPracticeMemoryItems,
   savePracticeMemory,
   syncPracticeMemoryToDevServer,
+  type MasteryEntryV1,
   type PracticeMemoryDocumentV1,
   type PracticeMemoryItem,
 } from './modules/fretboard-game/practiceMemory';
@@ -56,7 +57,7 @@ import type { FretPosition, PracticeKey, SharpNoteName } from './types/theory';
 const KEY_OPTIONS: PracticeKey[] = ['G major', 'C major'];
 const FAST_POSITION_RESPONSE_MS = 2500;
 const MASTERED_FAST_STREAK = 2;
-type AppView = 'practice' | 'memory';
+type AppView = 'practice' | 'memory' | 'weakness';
 type FretboardMarkerMode = 'note' | 'solfeggio';
 
 interface PositionPracticeStats {
@@ -67,6 +68,24 @@ interface PositionPracticeStats {
   correctFastStreak: number;
   lastResponseMs: number;
   averageResponseMs: number;
+}
+
+type WeaknessStatus = 'danger' | 'slow' | 'practiced' | 'mastered';
+
+interface WeaknessMapEntry {
+  itemKey: string;
+  noteName: SharpNoteName;
+  solfeggio: string;
+  position: FretPosition;
+  attempts: number;
+  correctCount: number;
+  wrongCount: number;
+  slowCount: number;
+  averageMs: number | null;
+  lastMs: number | null;
+  weaknessScore: number;
+  fastCorrectStreak: number;
+  status: WeaknessStatus;
 }
 
 function formatMs(ms: number): string {
@@ -191,11 +210,101 @@ function getMasteredPositionLabel(
   };
 }
 
+function parsePositionId(positionId: string | undefined): FretPosition | null {
+  if (positionId === undefined) {
+    return null;
+  }
+
+  const [stringText, fretText] = positionId.split('-');
+  const string = Number(stringText);
+  const fret = Number(fretText);
+
+  if (![1, 2, 3, 4, 5, 6].includes(string) || !Number.isInteger(fret) || fret < 0) {
+    return null;
+  }
+
+  return {
+    string: string as FretPosition['string'],
+    fret,
+  };
+}
+
+function resolveWeaknessStatus(entry: MasteryEntryV1): WeaknessStatus {
+  if (entry.wrongCount > 0 || entry.weaknessScore >= 3) {
+    return 'danger';
+  }
+
+  if (entry.slowCount > 0 || entry.weaknessScore > 0) {
+    return 'slow';
+  }
+
+  if (entry.fastCorrectStreak >= MASTERED_FAST_STREAK && entry.weaknessScore === 0) {
+    return 'mastered';
+  }
+
+  return 'practiced';
+}
+
+function toWeaknessMapEntry(entry: MasteryEntryV1): WeaknessMapEntry | null {
+  if (entry.mappingKind !== 'note-to-position' || entry.noteName === undefined || entry.solfeggio === undefined) {
+    return null;
+  }
+
+  const position = parsePositionId(entry.positionId);
+
+  if (position === null) {
+    return null;
+  }
+
+  return {
+    itemKey: entry.itemKey,
+    noteName: entry.noteName,
+    solfeggio: entry.solfeggio,
+    position,
+    attempts: entry.attempts,
+    correctCount: entry.correctCount,
+    wrongCount: entry.wrongCount,
+    slowCount: entry.slowCount,
+    averageMs: entry.averageMs,
+    lastMs: entry.lastMs,
+    weaknessScore: entry.weaknessScore,
+    fastCorrectStreak: entry.fastCorrectStreak,
+    status: resolveWeaknessStatus(entry),
+  };
+}
+
+function getWeaknessEntries(memory: PracticeMemoryDocumentV1, practiceKey: PracticeKey): WeaknessMapEntry[] {
+  return Object.values(memory.masteryMap)
+    .filter((entry) => entry.key === practiceKey)
+    .map(toWeaknessMapEntry)
+    .filter((entry): entry is WeaknessMapEntry => entry !== null)
+    .filter((entry) => isNoteInKey(entry.noteName, practiceKey));
+}
+
+function getOffKeyMistakeEntries(memory: PracticeMemoryDocumentV1, practiceKey: PracticeKey): WeaknessMapEntry[] {
+  return Object.values(memory.masteryMap)
+    .filter((entry) => entry.key === practiceKey && entry.wrongCount > 0)
+    .map(toWeaknessMapEntry)
+    .filter((entry): entry is WeaknessMapEntry => entry !== null)
+    .filter((entry) => !isNoteInKey(entry.noteName, practiceKey));
+}
+
+function sortWeaknessEntries(entries: WeaknessMapEntry[]): WeaknessMapEntry[] {
+  return [...entries].sort((a, b) => (
+    b.weaknessScore - a.weaknessScore
+      || b.wrongCount - a.wrongCount
+      || b.slowCount - a.slowCount
+      || (b.averageMs ?? 0) - (a.averageMs ?? 0)
+      || b.attempts - a.attempts
+  ));
+}
+
 function App() {
   const [activeView, setActiveView] = useState<AppView>('practice');
   const [markerMode, setMarkerMode] = useState<FretboardMarkerMode>('note');
   const [showOutOfKeyNotes, setShowOutOfKeyNotes] = useState(false);
   const [selectedMemoryPosition, setSelectedMemoryPosition] = useState<FretPosition | null>(null);
+  const [selectedWeaknessPosition, setSelectedWeaknessPosition] = useState<FretPosition | null>(null);
   const [hoveredMemoryNote, setHoveredMemoryNote] = useState<SharpNoteName | null>(null);
   const [config, setConfig] = useState<MvpPracticeConfig>(DEFAULT_MVP_CONFIG);
   const [practiceMemory, setPracticeMemory] = useState<PracticeMemoryDocumentV1>(() => loadPracticeMemory());
@@ -521,6 +630,11 @@ function App() {
     playFretboardPosition(position);
   }
 
+  function handleWeaknessPositionClick(position: FretPosition): void {
+    setSelectedWeaknessPosition(position);
+    playFretboardPosition(position);
+  }
+
   return (
     <main className="min-h-screen bg-[#11131d] text-slate-100">
       <div className="mx-auto flex min-h-screen w-full max-w-6xl flex-col gap-5 px-4 py-5">
@@ -561,6 +675,17 @@ function App() {
             >
               指板记忆
             </button>
+            <button
+              type="button"
+              onClick={() => setActiveView('weakness')}
+              className={`h-10 rounded-md border px-4 text-sm font-semibold transition ${
+                activeView === 'weakness'
+                  ? 'border-white bg-white text-slate-950'
+                  : 'border-white/15 bg-white/10 text-slate-200 hover:bg-white/20'
+              }`}
+            >
+              弱点地图
+            </button>
             {KEY_OPTIONS.map((key) => (
               <button
                 key={key}
@@ -578,7 +703,14 @@ function App() {
           </div>
         </header>
 
-        {activeView === 'memory' ? (
+        {activeView === 'weakness' ? (
+          <WeaknessMapView
+            practiceKey={config.key}
+            memory={practiceMemory}
+            selectedPosition={selectedWeaknessPosition}
+            onPositionClick={handleWeaknessPositionClick}
+          />
+        ) : activeView === 'memory' ? (
           <FretboardMemoryView
             practiceKey={config.key}
             markerMode={markerMode}
@@ -1123,6 +1255,198 @@ function FretboardMemoryView({
             先用音名标记确认位置，再切到唱名标记。特别留意 G 大调里 D = Sol，F# = Si。
           </p>
         </div>
+      </aside>
+    </section>
+  );
+}
+
+interface WeaknessMapViewProps {
+  practiceKey: PracticeKey;
+  memory: PracticeMemoryDocumentV1;
+  selectedPosition: FretPosition | null;
+  onPositionClick: (position: FretPosition) => void;
+}
+
+const WEAKNESS_STATUS_LABELS: Record<WeaknessStatus, string> = {
+  danger: '易错',
+  slow: '偏慢',
+  practiced: '有记录',
+  mastered: '熟练',
+};
+
+function getWeaknessLabel(entry: WeaknessMapEntry): FretboardPositionLabel {
+  if (entry.status === 'danger') {
+    return {
+      text: entry.noteName,
+      tone: 'neutral',
+      fill: '#9f1239',
+      stroke: '#fb7185',
+      textColor: '#ffffff',
+    };
+  }
+
+  if (entry.status === 'slow') {
+    return {
+      text: entry.noteName,
+      tone: 'neutral',
+      fill: '#b45309',
+      stroke: '#fbbf24',
+      textColor: '#ffffff',
+    };
+  }
+
+  const noteColor = NOTE_COLORS[entry.noteName];
+
+  return {
+    text: entry.noteName,
+    tone: entry.noteName.includes('#') ? 'accidental' : 'natural',
+    fill: entry.status === 'mastered' ? noteColor.softFill : '#334155',
+    stroke: entry.status === 'mastered' ? noteColor.stroke : '#94a3b8',
+    textColor: entry.status === 'mastered' ? noteColor.text : '#e2e8f0',
+    muted: entry.status === 'mastered',
+  };
+}
+
+function WeaknessMapView({ practiceKey, memory, selectedPosition, onPositionClick }: WeaknessMapViewProps) {
+  const entries = getWeaknessEntries(memory, practiceKey);
+  const offKeyEntries = getOffKeyMistakeEntries(memory, practiceKey);
+  const topEntries = sortWeaknessEntries(entries)
+    .filter((entry) => entry.weaknessScore > 0 || entry.wrongCount > 0 || entry.slowCount > 0)
+    .slice(0, 5);
+  const entryByPositionId = new Map(entries.map((entry) => [getPositionId(entry.position), entry]));
+  const selectedEntry = selectedPosition === null ? null : entryByPositionId.get(getPositionId(selectedPosition)) ?? null;
+  const selectedNote = selectedPosition === null ? null : getNoteAtPosition(selectedPosition);
+  const selectedSolfeggio = selectedNote === null ? null : getSolfeggioInKey(selectedNote, practiceKey);
+  const weakCount = entries.filter((entry) => entry.status === 'danger' || entry.status === 'slow').length;
+  const masteredCount = entries.filter((entry) => entry.status === 'mastered').length;
+  const fretRange = getDefaultFretRangeForKey(practiceKey);
+
+  function getPositionLabel(position: FretPosition): FretboardPositionLabel | null {
+    const entry = entryByPositionId.get(getPositionId(position));
+    return entry === undefined ? null : getWeaknessLabel(entry);
+  }
+
+  return (
+    <section className="grid flex-1 gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
+      <div className="space-y-5">
+        <div className="rounded-lg border border-white/10 bg-white/10 p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Weakness Map</p>
+              <h2 className="mt-2 text-xl font-semibold">随时查看的弱点地图</h2>
+              <p className="mt-2 text-sm leading-6 text-slate-400">
+                根据本地练习记忆展示当前调性的音名定位弱点。暖色代表偏慢，红色代表错、漏或误点；熟练位置用低调的音名颜色保留。
+              </p>
+            </div>
+            <div className="rounded-md bg-black/25 px-3 py-2 text-sm text-slate-300">
+              {practiceKey === 'G major' ? 'G 大调' : 'C 大调'} · 0-{fretRange[1]} 品 · 音名定位
+            </div>
+          </div>
+
+          <div className="mt-4 grid gap-3 sm:grid-cols-3">
+            <SummaryItem label="有记录位置" value={`${entries.length}`} />
+            <SummaryItem label="慢/错位置" value={`${weakCount}`} />
+            <SummaryItem label="熟练位置" value={`${masteredCount}`} />
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-white/10 bg-white/10 p-4">
+          {entries.length === 0 ? (
+            <div className="grid min-h-[220px] place-items-center rounded-lg bg-black/20 px-5 text-center">
+              <div>
+                <p className="text-lg font-semibold text-slate-100">还没有音名定位记录</p>
+                <p className="mt-2 text-sm leading-6 text-slate-400">
+                  去“练习”里选择音名定位，完成几题后这里会显示慢点、错点和熟练点。
+                </p>
+              </div>
+            </div>
+          ) : (
+            <Fretboard
+              fretCount={fretRange[1]}
+              selectedPositions={selectedPosition === null ? [] : [selectedPosition]}
+              getPositionLabel={getPositionLabel}
+              onPositionClick={onPositionClick}
+            />
+          )}
+        </div>
+      </div>
+
+      <aside className="flex flex-col gap-4 rounded-lg border border-white/10 bg-[#171a27] p-4">
+        <div>
+          <p className="text-sm font-semibold text-slate-200">Top 5 弱点位置</p>
+          <p className="mt-1 text-sm leading-6 text-slate-500">
+            先按弱点分排序，再看错误、慢速和平均耗时。
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          {topEntries.length === 0 ? (
+            <p className="rounded-lg bg-black/20 p-3 text-sm leading-6 text-slate-400">
+              当前没有明显弱点。继续练几轮后，这里会优先显示需要复习的位置。
+            </p>
+          ) : (
+            topEntries.map((entry) => (
+              <button
+                key={entry.itemKey}
+                type="button"
+                onClick={() => onPositionClick(entry.position)}
+                className="w-full rounded-lg border border-white/10 bg-black/20 p-3 text-left transition hover:bg-white/10"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm font-semibold text-slate-100">
+                    {formatPosition(entry.position)} · {entry.noteName}/{entry.solfeggio}
+                  </p>
+                  <span className="rounded-md bg-white/10 px-2 py-1 text-xs text-slate-300">
+                    {WEAKNESS_STATUS_LABELS[entry.status]}
+                  </span>
+                </div>
+                <p className="mt-2 text-sm leading-6 text-slate-400">
+                  弱点分 {entry.weaknessScore} · 慢 {entry.slowCount} · 错 {entry.wrongCount}
+                  {entry.averageMs === null ? '' : ` · 平均 ${formatMs(entry.averageMs)}`}
+                </p>
+              </button>
+            ))
+          )}
+        </div>
+
+        <div className="rounded-lg border border-white/10 bg-white/8 p-4">
+          <p className="text-sm font-semibold text-slate-200">当前点击</p>
+          {selectedPosition === null || selectedNote === null ? (
+            <p className="mt-2 text-sm leading-6 text-slate-500">点击地图上的任意位置查看详情并播放音高。</p>
+          ) : selectedEntry === null ? (
+            <div className="mt-3 space-y-2 text-sm text-slate-300">
+              <p>位置：{formatPosition(selectedPosition)}</p>
+              <p>音名：{selectedNote}</p>
+              <p>{practiceKey === 'G major' ? 'G 大调' : 'C 大调'}唱名：{selectedSolfeggio ?? '调外音'}</p>
+              <p className="text-slate-500">这个位置还没有音名定位记录。</p>
+            </div>
+          ) : (
+            <div className="mt-3 space-y-2 text-sm text-slate-300">
+              <p>位置：{formatPosition(selectedEntry.position)}</p>
+              <p>音名/唱名：{selectedEntry.noteName} / {selectedEntry.solfeggio}</p>
+              <p>状态：{WEAKNESS_STATUS_LABELS[selectedEntry.status]}</p>
+              <p>尝试：{selectedEntry.attempts}，正确 {selectedEntry.correctCount}，错误 {selectedEntry.wrongCount}</p>
+              <p>慢速：{selectedEntry.slowCount}，弱点分 {selectedEntry.weaknessScore}</p>
+              <p>
+                最近：{selectedEntry.lastMs === null ? '暂无' : formatMs(selectedEntry.lastMs)}
+                {selectedEntry.averageMs === null ? '' : `，平均 ${formatMs(selectedEntry.averageMs)}`}
+              </p>
+            </div>
+          )}
+        </div>
+
+        {offKeyEntries.length > 0 && (
+          <div className="rounded-lg border border-rose-300/20 bg-rose-400/10 p-4">
+            <p className="text-sm font-semibold text-rose-100">调外误触记录</p>
+            <div className="mt-3 space-y-2">
+              {offKeyEntries.slice(0, 4).map((entry) => (
+                <p key={entry.itemKey} className="text-sm leading-6 text-rose-100/85">
+                  {formatPosition(entry.position)} · {entry.noteName}，错误 {entry.wrongCount} 次
+                </p>
+              ))}
+            </div>
+          </div>
+        )}
       </aside>
     </section>
   );

@@ -18,7 +18,7 @@ test('MVP 练习页可见并能完成一道音名题', async ({ page }) => {
   await page.goto('/');
 
   await expect(page.getByRole('heading', { name: '位置、音名、唱名反应训练' })).toBeVisible();
-  await expect(page.getByText('v0.0.8')).toBeVisible();
+  await expect(page.getByText('v0.0.9')).toBeVisible();
   await expect(page.getByRole('button', { name: 'G 大调' })).toBeVisible();
   await expect(page.getByRole('button', { name: '综合练习' })).toBeVisible();
   await expect(page.getByText('第 1 / 20 题')).toBeVisible();
@@ -94,7 +94,7 @@ test('练习记忆会按版本写入本地并跨刷新保留', async ({ page }) 
   };
 
   expect(parsedBeforeReload.schemaVersion).toBe(1);
-  expect(parsedBeforeReload.appVersion).toBe('0.0.8');
+  expect(parsedBeforeReload.appVersion).toBe('0.0.9');
   expect(parsedBeforeReload.recentEvents?.length).toBeGreaterThan(0);
   expect(Object.keys(parsedBeforeReload.masteryMap ?? {}).length).toBeGreaterThan(0);
   expect(parsedBeforeReload.recentEvents).toEqual(
@@ -110,6 +110,24 @@ test('练习记忆会按版本写入本地并跨刷新保留', async ({ page }) 
     window.localStorage.getItem('guitarLab.practiceMemory.v1')
   ));
   expect(storedAfterReload).toBe(storedBeforeReload);
+});
+
+test('弱点地图可以随时查看音名定位弱点', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: '音名定位' }).click();
+  await page.locator('g[aria-label="播放 1 弦 1 品"]').click();
+  await page.getByRole('button', { name: '弱点地图' }).click();
+
+  await expect(page.getByRole('heading', { name: '随时查看的弱点地图' })).toBeVisible();
+  await expect(page.getByText('G 大调 · 0-4 品 · 音名定位')).toBeVisible();
+  await expect(page.getByText('Top 5 弱点位置')).toBeVisible();
+  await expect(page.getByText('2 弦 0 品 · B/Mi')).toBeVisible();
+  await expect(page.getByText('调外误触记录')).toBeVisible();
+
+  await page.locator('g[aria-label="播放 2 弦 0 品"]').click();
+  await expect(page.getByText('当前点击')).toBeVisible();
+  await expect(page.getByText('音名/唱名：B / Mi')).toBeVisible();
 });
 
 test('音名定位会把本轮已掌握位置预标成音名提示', async ({ page }) => {
