@@ -62,6 +62,11 @@ export interface MasteryEntryV1 {
   fastCorrectStreak: number;
 }
 
+export interface ResponseGroupEntryV1 {
+  groupKey: string;
+  recentResponseMs: number[];
+}
+
 export interface AdaptivePracticeConfigSnapshot {
   schemaVersion: number;
   recentWindowSize: number;
@@ -79,6 +84,7 @@ export interface PracticeMemoryDocumentV1 {
   profile: PracticeMemoryProfile;
   configSnapshot: AdaptivePracticeConfigSnapshot;
   masteryMap: Record<string, MasteryEntryV1>;
+  responseGroups: Record<string, ResponseGroupEntryV1>;
   recentEvents: PracticeEventV1[];
 }
 
@@ -130,6 +136,7 @@ export function createEmptyPracticeMemory(now = new Date().toISOString()): Pract
     },
     configSnapshot: createConfigSnapshot(),
     masteryMap: {},
+    responseGroups: {},
     recentEvents: [],
   };
 }
@@ -160,6 +167,7 @@ export function parsePracticeMemoryJson(jsonText: string): PracticeMemoryDocumen
     ...parsed,
     appVersion: APP_VERSION,
     configSnapshot: createConfigSnapshot(),
+    responseGroups: parsed.responseGroups ?? {},
   };
 }
 
@@ -308,9 +316,7 @@ function getMedian(values: number[]): number {
     : sortedValues[middle];
 }
 
-function isRelativeSlow(entry: MasteryEntryV1 | undefined, responseMs: number): boolean {
-  const samples = entry?.recentResponseMs ?? [];
-
+function isRelativeSlow(samples: number[], responseMs: number): boolean {
   if (samples.length < ADAPTIVE_PRACTICE_CONFIG.minSamplesForRelativeSlow) {
     return false;
   }
@@ -321,6 +327,14 @@ function isRelativeSlow(entry: MasteryEntryV1 | undefined, responseMs: number): 
 
   return responseMs >= slowBoundary
     && responseMs >= medianMs * ADAPTIVE_PRACTICE_CONFIG.slowMedianMultiplier;
+}
+
+function createResponseGroupKey(item: PracticeMemoryItem): string {
+  return [
+    item.question.type,
+    item.question.key,
+    item.mappingKind,
+  ].join('|');
 }
 
 function createMasteryEntry(item: PracticeMemoryItem, now: string): MasteryEntryV1 {
@@ -349,14 +363,27 @@ function clampWeaknessScore(value: number): number {
   return Math.max(0, value);
 }
 
-function updateEntryWithItem(entry: MasteryEntryV1, item: PracticeMemoryItem, now: string): {
+function updateEntryWithItem(
+  entry: MasteryEntryV1,
+  item: PracticeMemoryItem,
+  groupSamples: number[],
+  now: string,
+): {
   entry: MasteryEntryV1;
   event: PracticeEventV1;
+  groupKey: string;
+  groupResponseMs: number | null;
 } {
   const responseMs = item.responseMs;
-  const isIgnored = responseMs === null || responseMs > ADAPTIVE_PRACTICE_CONFIG.maxValidResponseMs;
-  const ignoredReason: PracticeIgnoredReason | undefined = responseMs === null ? 'no-response-time' : isIgnored ? 'response-too-long' : undefined;
-  const isSlow = !isIgnored && item.isCorrect && responseMs !== null && isRelativeSlow(entry, responseMs);
+  const groupKey = createResponseGroupKey(item);
+  const isMissingResponse = responseMs === null;
+  const isResponseTooLong = responseMs !== null && responseMs > ADAPTIVE_PRACTICE_CONFIG.maxValidResponseMs;
+  const isIgnored = isResponseTooLong || (isMissingResponse && item.isCorrect);
+  const ignoredReason: PracticeIgnoredReason | undefined = isIgnored
+    ? isResponseTooLong ? 'response-too-long' : 'no-response-time'
+    : undefined;
+  const shouldRecordResponseMs = !isIgnored && responseMs !== null;
+  const isSlow = shouldRecordResponseMs && item.isCorrect && isRelativeSlow(groupSamples, responseMs);
   const isFastCorrect = !isIgnored && item.isCorrect && !isSlow;
   const outcome: PracticeOutcome = isIgnored
     ? 'ignored'
@@ -368,11 +395,12 @@ function updateEntryWithItem(entry: MasteryEntryV1, item: PracticeMemoryItem, no
   const correctCount = entry.correctCount + (!isIgnored && item.isCorrect ? 1 : 0);
   const wrongCount = entry.wrongCount + (!isIgnored && !item.isCorrect ? 1 : 0);
   const slowCount = entry.slowCount + (isSlow ? 1 : 0);
-  const recentResponseMs = !isIgnored && responseMs !== null
+  const recentResponseMs = shouldRecordResponseMs
     ? [...entry.recentResponseMs, responseMs].slice(-ADAPTIVE_PRACTICE_CONFIG.recentWindowSize)
     : entry.recentResponseMs;
-  const averageMs = !isIgnored && responseMs !== null
-    ? Math.round((((entry.averageMs ?? 0) * entry.attempts) + responseMs) / attempts)
+  const responseSampleCount = entry.recentResponseMs.length;
+  const averageMs = shouldRecordResponseMs
+    ? Math.round((((entry.averageMs ?? 0) * responseSampleCount) + responseMs) / (responseSampleCount + 1))
     : entry.averageMs;
   const previousFastStreak = entry.fastCorrectStreak;
   const fastCorrectStreak = isFastCorrect ? previousFastStreak + 1 : 0;
@@ -400,6 +428,8 @@ function updateEntryWithItem(entry: MasteryEntryV1, item: PracticeMemoryItem, no
       weaknessScore: clampWeaknessScore(entry.weaknessScore + weaknessDelta),
       fastCorrectStreak,
     },
+    groupKey,
+    groupResponseMs: shouldRecordResponseMs ? responseMs : null,
     event: {
       id: createId('practice-event'),
       createdAt: now,
@@ -421,12 +451,25 @@ export function recordPracticeMemoryItems(
   now = new Date().toISOString(),
 ): PracticeMemoryDocumentV1 {
   const masteryMap = { ...memory.masteryMap };
+  const responseGroups = { ...memory.responseGroups };
   const events: PracticeEventV1[] = [];
 
   for (const item of items) {
     const currentEntry = masteryMap[item.itemKey] ?? createMasteryEntry(item, now);
-    const result = updateEntryWithItem(currentEntry, item, now);
+    const groupKey = createResponseGroupKey(item);
+    const currentGroup = responseGroups[groupKey] ?? {
+      groupKey,
+      recentResponseMs: [],
+    };
+    const result = updateEntryWithItem(currentEntry, item, currentGroup.recentResponseMs, now);
     masteryMap[item.itemKey] = result.entry;
+    if (result.groupResponseMs !== null) {
+      responseGroups[groupKey] = {
+        groupKey,
+        recentResponseMs: [...currentGroup.recentResponseMs, result.groupResponseMs]
+          .slice(-ADAPTIVE_PRACTICE_CONFIG.recentWindowSize),
+      };
+    }
     events.push(result.event);
   }
 
@@ -438,6 +481,7 @@ export function recordPracticeMemoryItems(
     updatedAt: now,
     configSnapshot: createConfigSnapshot(),
     masteryMap,
+    responseGroups,
     recentEvents,
   };
 }
