@@ -50,6 +50,7 @@ import {
   recordPracticeMemoryItems,
   savePracticeMemory,
   syncPracticeMemoryToDevServer,
+  type MappingKind,
   type MasteryEntryV1,
   type PracticeMemoryDocumentV1,
   type PracticeMemoryItem,
@@ -108,7 +109,7 @@ const PRACTICE_PATH_OPTIONS: PracticePathOption[] = [
     to: '唱名',
     label: '位置 -> 唱名',
     description: '看到指板位置后，直接反应当前调里的首调唱名。',
-    weaknessAvailable: false,
+    weaknessAvailable: true,
     edgePosition: { left: '50%', top: '84%' },
   },
   {
@@ -117,7 +118,7 @@ const PRACTICE_PATH_OPTIONS: PracticePathOption[] = [
     to: '音名',
     label: '六线谱 -> 音名',
     description: '看到六线谱位置后，快速反应它在指板上的音名。',
-    weaknessAvailable: false,
+    weaknessAvailable: true,
     edgePosition: { left: '48%', top: '38%' },
   },
   {
@@ -126,7 +127,7 @@ const PRACTICE_PATH_OPTIONS: PracticePathOption[] = [
     to: '唱名',
     label: '六线谱 -> 唱名',
     description: '看到六线谱位置后，反应当前调里的首调唱名。',
-    weaknessAvailable: false,
+    weaknessAvailable: true,
     edgePosition: { left: '66%', top: '38%' },
   },
   {
@@ -382,8 +383,64 @@ function getWeaknessMapRecentPressure(memory: PracticeMemoryDocumentV1, itemKey:
   }, 0);
 }
 
-function toWeaknessMapEntry(entry: MasteryEntryV1, memory: PracticeMemoryDocumentV1): WeaknessMapEntry | null {
-  if (entry.mappingKind !== 'note-to-position' || entry.noteName === undefined) {
+function getPositionWeaknessMappingKind(modeId: PracticeModeId): MappingKind | null {
+  if (modeId === 'note-to-positions') {
+    return 'note-to-position';
+  }
+
+  if (modeId === 'board-to-note' || modeId === 'tab-to-note') {
+    return 'position-to-note';
+  }
+
+  if (modeId === 'board-to-solfeggio' || modeId === 'tab-to-solfeggio') {
+    return 'position-to-solfeggio';
+  }
+
+  return null;
+}
+
+function getPositionWeaknessCopy(modeId: PracticeModeId): {
+  heading: string;
+  description: string;
+  emptyTitle: string;
+  emptyDescription: string;
+  noEntryText: string;
+} {
+  if (modeId === 'note-to-positions') {
+    return {
+      heading: '随时查看的弱点地图',
+      description: '根据近期练习事件展示当前通路的指板位置压力。暖色代表近期相对更需要关注；历史慢错仍保留在详情里。',
+      emptyTitle: '还没有音名定位记录',
+      emptyDescription: '去“练习”里选择音名定位，完成几题后这里会显示慢点、错点和熟练点。',
+      noEntryText: '这个位置还没有音名定位记录。',
+    };
+  }
+
+  if (modeId === 'board-to-note' || modeId === 'tab-to-note') {
+    return {
+      heading: '位置音名弱点地图',
+      description: '按“位置 -> 音名”的映射统计近期压力。指板题和六线谱题会共享这条认知通路的掌握数据。',
+      emptyTitle: '还没有位置音名记录',
+      emptyDescription: '去“练习”里选择指板音名或六线谱音名，完成几题后这里会显示慢反应和错答位置。',
+      noEntryText: '这个位置还没有位置音名记录。',
+    };
+  }
+
+  return {
+    heading: '位置唱名弱点地图',
+    description: '按“位置 -> 唱名”的映射统计近期压力。指板题和六线谱题会共享这条认知通路的掌握数据。',
+    emptyTitle: '还没有位置唱名记录',
+    emptyDescription: '去“练习”里选择指板唱名或六线谱唱名，完成几题后这里会显示慢反应和错答位置。',
+    noEntryText: '这个位置还没有位置唱名记录。',
+  };
+}
+
+function toWeaknessMapEntry(
+  entry: MasteryEntryV1,
+  memory: PracticeMemoryDocumentV1,
+  mappingKind: MappingKind,
+): WeaknessMapEntry | null {
+  if (entry.mappingKind !== mappingKind || entry.noteName === undefined) {
     return null;
   }
 
@@ -482,10 +539,14 @@ function applyWeaknessMapStatuses<T extends {
   });
 }
 
-function getWeaknessEntries(memory: PracticeMemoryDocumentV1, practiceKey: PracticeKey): WeaknessMapEntry[] {
+function getWeaknessEntries(
+  memory: PracticeMemoryDocumentV1,
+  practiceKey: PracticeKey,
+  mappingKind: MappingKind,
+): WeaknessMapEntry[] {
   const entries = Object.values(memory.masteryMap)
     .filter((entry) => entry.key === practiceKey)
-    .map((entry) => toWeaknessMapEntry(entry, memory))
+    .map((entry) => toWeaknessMapEntry(entry, memory, mappingKind))
     .filter((entry): entry is WeaknessMapEntry => entry !== null)
     .filter((entry) => isNoteInKey(entry.noteName, practiceKey));
 
@@ -505,10 +566,14 @@ function getNoteSolfeggioWeaknessEntries(
   return applyWeaknessMapStatuses(entries);
 }
 
-function getOffKeyMistakeEntries(memory: PracticeMemoryDocumentV1, practiceKey: PracticeKey): WeaknessMapEntry[] {
+function getOffKeyMistakeEntries(
+  memory: PracticeMemoryDocumentV1,
+  practiceKey: PracticeKey,
+  mappingKind: MappingKind,
+): WeaknessMapEntry[] {
   return Object.values(memory.masteryMap)
     .filter((entry) => entry.key === practiceKey && entry.wrongCount > 0)
-    .map((entry) => toWeaknessMapEntry(entry, memory))
+    .map((entry) => toWeaknessMapEntry(entry, memory, mappingKind))
     .filter((entry): entry is WeaknessMapEntry => entry !== null)
     .filter((entry) => !isNoteInKey(entry.noteName, practiceKey));
 }
@@ -2103,8 +2168,22 @@ function WeaknessMapView({
     );
   }
 
-  const entries = getWeaknessEntries(memory, practiceKey);
-  const offKeyEntries = getOffKeyMistakeEntries(memory, practiceKey);
+  const mappingKind = getPositionWeaknessMappingKind(modeId);
+
+  if (mappingKind === null) {
+    return (
+      <section className="grid min-h-[260px] place-items-center rounded-lg border border-white/10 bg-white/10 p-6 text-center">
+        <div>
+          <p className="text-lg font-semibold text-slate-100">当前通路暂无弱点地图</p>
+          <p className="mt-2 text-sm leading-6 text-slate-400">综合练习会混合多个通路，先切到具体练习后再查看对应弱点。</p>
+        </div>
+      </section>
+    );
+  }
+
+  const copy = getPositionWeaknessCopy(modeId);
+  const entries = getWeaknessEntries(memory, practiceKey, mappingKind);
+  const offKeyEntries = getOffKeyMistakeEntries(memory, practiceKey, mappingKind);
   const topEntries = sortWeaknessEntries(entries)
     .filter((entry) => entry.status === 'danger' || entry.status === 'slow')
     .slice(0, 5);
@@ -2128,9 +2207,9 @@ function WeaknessMapView({
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Weakness Map</p>
-              <h2 className="mt-2 text-xl font-semibold">随时查看的弱点地图</h2>
+              <h2 className="mt-2 text-xl font-semibold">{copy.heading}</h2>
               <p className="mt-2 text-sm leading-6 text-slate-400">
-                根据近期练习事件展示当前通路的指板位置压力。暖色代表近期相对更需要关注；历史慢错仍保留在详情里。
+                {copy.description}
               </p>
             </div>
             <div className="rounded-md bg-black/25 px-3 py-2 text-sm text-slate-300">
@@ -2149,9 +2228,9 @@ function WeaknessMapView({
           {entries.length === 0 ? (
             <div className="grid min-h-[220px] place-items-center rounded-lg bg-black/20 px-5 text-center">
               <div>
-                <p className="text-lg font-semibold text-slate-100">还没有音名定位记录</p>
+                <p className="text-lg font-semibold text-slate-100">{copy.emptyTitle}</p>
                 <p className="mt-2 text-sm leading-6 text-slate-400">
-                  去“练习”里选择音名定位，完成几题后这里会显示慢点、错点和熟练点。
+                  {copy.emptyDescription}
                 </p>
               </div>
             </div>
@@ -2213,7 +2292,7 @@ function WeaknessMapView({
               <p>位置：{formatPosition(selectedPosition)}</p>
               <p>音名：{selectedNote}</p>
               <p>{practiceKey === 'G major' ? 'G 大调' : 'C 大调'}唱名：{selectedSolfeggio === null ? '调外音' : formatSolfeggio(selectedSolfeggio, solfeggioDisplayMode)}</p>
-              <p className="text-slate-500">这个位置还没有音名定位记录。</p>
+              <p className="text-slate-500">{copy.noEntryText}</p>
             </div>
           ) : (
             <div className="mt-3 space-y-2 text-sm text-slate-300">

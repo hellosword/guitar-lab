@@ -18,7 +18,7 @@ test('MVP 练习页可见并能完成一道音名题', async ({ page }) => {
   await page.goto('/');
 
   await expect(page.getByRole('heading', { name: '位置、音名、唱名反应训练' })).toBeVisible();
-  await expect(page.getByText('v0.0.26')).toBeVisible();
+  await expect(page.getByText('v0.0.27')).toBeVisible();
   await expect(page.getByRole('button', { name: 'G 大调' })).toBeVisible();
   await expect(page.getByRole('button', { name: '速查' })).toBeVisible();
   await expect(page.getByRole('button', { name: '综合练习' })).toBeVisible();
@@ -141,7 +141,7 @@ test('练习记忆会按版本写入本地并跨刷新保留', async ({ page }) 
   };
 
   expect(parsedBeforeReload.schemaVersion).toBe(1);
-  expect(parsedBeforeReload.appVersion).toBe('0.0.26');
+  expect(parsedBeforeReload.appVersion).toBe('0.0.27');
   expect(parsedBeforeReload.recentEvents?.length).toBeGreaterThan(0);
   expect(Object.keys(parsedBeforeReload.masteryMap ?? {}).length).toBeGreaterThan(0);
   expect(parsedBeforeReload.recentEvents).toEqual(
@@ -235,11 +235,100 @@ test('音名唱名会记录映射粒度并显示对应弱点地图', async ({ pa
   await expect(page.getByText('音名/唱名：B / Mi')).toBeVisible();
 });
 
+test('位置输入类练习会共享位置级自适应记录并显示弱点地图', async ({ page }) => {
+  const positionNoteItemKey = 'position-to-note|G major|B|Mi|2-0';
+  const positionSolfeggioItemKey = 'position-to-solfeggio|G major|D|Sol|4-0';
+  const createEntry = (
+    itemKey: string,
+    mappingKind: string,
+    noteName: string,
+    solfeggio: string,
+    positionId: string,
+  ) => ({
+    itemKey,
+    mappingKind,
+    key: 'G major',
+    noteName,
+    solfeggio,
+    positionId,
+    attempts: 2,
+    correctCount: 0,
+    wrongCount: 2,
+    slowCount: 0,
+    ignoredCount: 0,
+    averageMs: 2600,
+    lastMs: 2600,
+    recentResponseMs: [2600],
+    lastSeenAt: '2026-05-03T00:00:00.000Z',
+    weaknessScore: 4,
+    fastCorrectStreak: 0,
+  });
+  const createEvent = (id: string, questionType: string, mappingKind: string, itemKey: string) => ({
+    id,
+    createdAt: '2026-05-03T00:00:00.000Z',
+    questionId: id,
+    questionType,
+    key: 'G major',
+    mappingKind,
+    itemKey,
+    outcome: 'wrong',
+    responseMs: 2600,
+  });
+  const memory = {
+    schemaVersion: 1,
+    appVersion: '0.0.27',
+    createdAt: '2026-05-03T00:00:00.000Z',
+    updatedAt: '2026-05-03T00:00:00.000Z',
+    profile: { id: 'test-profile' },
+    configSnapshot: {
+      schemaVersion: 1,
+      recentWindowSize: 50,
+      minSamplesForRelativeSlow: 10,
+      slowPercentile: 0.7,
+      slowMedianMultiplier: 1.35,
+      maxValidResponseMs: 60000,
+    },
+    masteryMap: {
+      [positionNoteItemKey]: createEntry(positionNoteItemKey, 'position-to-note', 'B', 'Mi', '2-0'),
+      [positionSolfeggioItemKey]: createEntry(positionSolfeggioItemKey, 'position-to-solfeggio', 'D', 'Sol', '4-0'),
+    },
+    responseGroups: {},
+    recentEvents: [
+      createEvent('event-position-note-1', 'board-to-note', 'position-to-note', positionNoteItemKey),
+      createEvent('event-position-solfeggio-1', 'tab-to-solfeggio', 'position-to-solfeggio', positionSolfeggioItemKey),
+    ],
+  };
+
+  await page.addInitScript((storedMemory) => {
+    window.localStorage.setItem('guitarLab.practiceMemory.v1', JSON.stringify(storedMemory));
+  }, memory);
+  await page.goto('/');
+
+  await page.getByRole('button', { name: '指板音名' }).click();
+  await page.getByRole('tab', { name: '查看弱点' }).click();
+  await expect(page.getByRole('heading', { name: '位置音名弱点地图' })).toBeVisible();
+  await expect(page.getByText('G 大调 · 0-4 品 · 位置 -> 音名')).toBeVisible();
+  await expect(page.getByText('2 弦 0 品 · B/Mi')).toBeVisible();
+
+  await page.locator('g[aria-label="播放 2 弦 0 品"]').click();
+  await expect(page.getByText('音名/唱名：B / Mi')).toBeVisible();
+
+  await page.getByRole('button', { name: '六线谱唱名' }).click();
+  await expect(page.getByRole('heading', { name: '位置唱名弱点地图' })).toBeVisible();
+  await expect(page.getByText('G 大调 · 0-4 品 · 六线谱 -> 唱名')).toBeVisible();
+  await expect(page.getByText('4 弦 0 品 · D/Sol')).toBeVisible();
+
+  await page.getByRole('button', { name: '六线谱音名' }).click();
+  await expect(page.getByRole('heading', { name: '位置音名弱点地图' })).toBeVisible();
+  await page.getByRole('button', { name: '指板唱名' }).click();
+  await expect(page.getByRole('heading', { name: '位置唱名弱点地图' })).toBeVisible();
+});
+
 test('全局唱名显示模式会同步影响练习、指板记忆和弱点地图', async ({ page }) => {
   const bItemKey = 'note-to-position|G major|B|Mi|2-0';
   const memory = {
     schemaVersion: 1,
-    appVersion: '0.0.26',
+    appVersion: '0.0.27',
     createdAt: '2026-05-03T00:00:00.000Z',
     updatedAt: '2026-05-03T00:00:00.000Z',
     profile: { id: 'test-profile' },

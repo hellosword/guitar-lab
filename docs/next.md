@@ -110,3 +110,4 @@
 | 2026-05-03 | v0.0.24 | 通路视图 tab 化：将练习/查看弱点改为同一通路下的 tab，并统一下方内容区布局 | `src/App.tsx`、`docs/product/practice-path-interaction-framework-spec.md`、`tests/e2e/mvp-practice.spec.ts` |
 | 2026-05-03 | v0.0.25 | 日常练习密度优化：压缩顶部 Header 和练习模式工具栏，让题目与作答区更早进入首屏 | `src/App.tsx`、`docs/product/practice-path-interaction-framework-spec.md`、`tests/e2e/mvp-practice.spec.ts` |
 | 2026-05-03 | v0.0.26 | 音名唱名练习升级：按 `key + noteName -> solfeggio` 记录历史、自适应出题，并新增对应弱点地图 | `src/modules/fretboard-game/practiceSession.ts`、`src/modules/fretboard-game/adaptivePracticeConfig.ts`、`src/App.tsx`、`tests/e2e/mvp-practice.spec.ts` |
+| 2026-05-03 | v0.0.27 | 剩余位置输入类练习补齐弱点地图：指板音名、指板唱名、六线谱音名、六线谱唱名接入位置级历史记录与自适应复盘 | `src/App.tsx`、`tests/e2e/mvp-practice.spec.ts` |
