@@ -6,7 +6,7 @@ import type { FretboardPositionLabel, FretboardPositionState } from './component
 import NoteSelector from './components/NoteSelector';
 import SolfeggioSelector from './components/SolfeggioSelector';
 import Tablature from './components/Tablature';
-import { playPositionPitch } from './lib/audio';
+import { playPositionPitch, preloadPositionPitch, type GuitarToneId } from './lib/audio';
 import {
   formatSolfeggio,
   isSolfeggio,
@@ -68,6 +68,7 @@ import type { FretPosition, PracticeKey, SharpNoteName } from './types/theory';
 const KEY_OPTIONS: PracticeKey[] = ['G major', 'C major'];
 const FAST_POSITION_RESPONSE_MS = 2500;
 const MASTERED_FAST_STREAK = 2;
+const GUITAR_TONE_STORAGE_KEY = 'guitar-lab:guitar-tone';
 type AppView = 'practice' | 'reference';
 type PracticeSubView = 'train' | 'weakness';
 type FretboardMarkerMode = 'note' | 'solfeggio';
@@ -600,10 +601,20 @@ function sortNoteSolfeggioWeaknessEntries(entries: NoteSolfeggioWeaknessEntry[])
   ));
 }
 
+function loadGuitarTone(): GuitarToneId {
+  const storedTone = window.localStorage.getItem(GUITAR_TONE_STORAGE_KEY);
+  return storedTone === 'clean-electric' ? 'clean-electric' : 'emilyguitar';
+}
+
+function saveGuitarTone(toneId: GuitarToneId): void {
+  window.localStorage.setItem(GUITAR_TONE_STORAGE_KEY, toneId);
+}
+
 function App() {
   const [activeView, setActiveView] = useState<AppView>('practice');
   const [practiceSubView, setPracticeSubView] = useState<PracticeSubView>('train');
   const [solfeggioDisplayMode, setSolfeggioDisplayMode] = useState<SolfeggioDisplayMode>(() => loadSolfeggioDisplayMode());
+  const [guitarTone, setGuitarTone] = useState<GuitarToneId>(() => loadGuitarTone());
   const [markerMode, setMarkerMode] = useState<FretboardMarkerMode>('note');
   const [showOutOfKeyNotes, setShowOutOfKeyNotes] = useState(false);
   const [selectedMemoryPosition, setSelectedMemoryPosition] = useState<FretPosition | null>(null);
@@ -644,6 +655,10 @@ function App() {
     saveSolfeggioDisplayMode(solfeggioDisplayMode);
   }, [solfeggioDisplayMode]);
 
+  useEffect(() => {
+    saveGuitarTone(guitarTone);
+  }, [guitarTone]);
+
   useEffect(() => () => {
     if (autoAdvanceTimeoutRef.current !== null) {
       window.clearTimeout(autoAdvanceTimeoutRef.current);
@@ -655,10 +670,29 @@ function App() {
       return;
     }
 
-    playPositionPitch(currentQuestion.position).catch(() => {
+    playPositionPitch(currentQuestion.position, guitarTone).catch(() => {
       // 浏览器可能在首次用户手势前阻止自动播放，此时保留手动重播按钮。
     });
-  }, [currentQuestion]);
+  }, [currentQuestion, guitarTone]);
+
+  useEffect(() => {
+    const positionsToPreload = questions
+      .slice(currentIndex, currentIndex + 5)
+      .flatMap((question) => (
+        question.answerKind === 'positions'
+          ? [question.position, ...question.targetPositions]
+          : [question.position]
+      ))
+      .filter((position, index, positions) => (
+        positions.findIndex((candidate) => isSamePosition(candidate, position)) === index
+      ));
+
+    positionsToPreload.forEach((position) => {
+      preloadPositionPitch(position, guitarTone).catch(() => {
+        // 预加载失败时保留按需加载，不影响练习。
+      });
+    });
+  }, [questions, currentIndex, guitarTone]);
 
   useEffect(() => {
     if (currentQuestion === undefined || currentQuestion.answerKind !== 'positions') {
@@ -965,14 +999,14 @@ function App() {
 
   function replayCurrentPitch(): void {
     if (currentQuestion !== undefined) {
-      playPositionPitch(currentQuestion.position).catch(() => {
+      playPositionPitch(currentQuestion.position, guitarTone).catch(() => {
         // 用户设备或浏览器禁用音频时，不影响答题流程。
       });
     }
   }
 
   function playFretboardPosition(position: FretPosition): void {
-    playPositionPitch(position).catch(() => {
+    playPositionPitch(position, guitarTone).catch(() => {
       // 点击指板发音是辅助能力，失败时不阻塞练习。
     });
   }
@@ -1041,6 +1075,10 @@ function App() {
             <SolfeggioDisplayModeSelector
               activeMode={solfeggioDisplayMode}
               onModeChange={setSolfeggioDisplayMode}
+            />
+            <GuitarToneSelector
+              activeTone={guitarTone}
+              onToneChange={setGuitarTone}
             />
           </div>
         </header>
@@ -1285,7 +1323,7 @@ function App() {
                     record={answeredRecord}
                     solfeggioDisplayMode={solfeggioDisplayMode}
                     onNext={goToNextQuestion}
-                    onReplay={() => playPositionPitch(answeredRecord.question.position)}
+                    onReplay={() => playPositionPitch(answeredRecord.question.position, guitarTone)}
                     isLast={currentIndex === questions.length - 1}
                   />
                 )}
@@ -1635,6 +1673,39 @@ function SolfeggioDisplayModeSelector({ activeMode, onModeChange }: SolfeggioDis
               : 'text-slate-200 hover:bg-white/15'
           }`}
           aria-pressed={activeMode === option.id}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+interface GuitarToneSelectorProps {
+  activeTone: GuitarToneId;
+  onToneChange: (toneId: GuitarToneId) => void;
+}
+
+function GuitarToneSelector({ activeTone, onToneChange }: GuitarToneSelectorProps) {
+  const options: Array<{ id: GuitarToneId; label: string }> = [
+    { id: 'clean-electric', label: 'Clean' },
+    { id: 'emilyguitar', label: 'Emily' },
+  ];
+
+  return (
+    <div className="flex h-9 overflow-hidden rounded-md border border-white/15 bg-white/8">
+      {options.map((option) => (
+        <button
+          key={option.id}
+          type="button"
+          onClick={() => onToneChange(option.id)}
+          className={`px-3 text-sm font-semibold transition ${
+            activeTone === option.id
+              ? 'bg-guitar-accent text-white'
+              : 'text-slate-200 hover:bg-white/15'
+          }`}
+          aria-pressed={activeTone === option.id}
+          title={option.id === 'clean-electric' ? 'FreePats 干净电吉他' : 'Karoryfer Emilyguitar'}
         >
           {option.label}
         </button>
