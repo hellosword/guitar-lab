@@ -67,8 +67,87 @@ import type { FretPosition, PracticeKey, SharpNoteName } from './types/theory';
 const KEY_OPTIONS: PracticeKey[] = ['G major', 'C major'];
 const FAST_POSITION_RESPONSE_MS = 2500;
 const MASTERED_FAST_STREAK = 2;
-type AppView = 'practice' | 'memory' | 'weakness';
+type AppView = 'practice' | 'reference';
+type PracticeSubView = 'train' | 'weakness';
 type FretboardMarkerMode = 'note' | 'solfeggio';
+
+interface PracticePathOption {
+  id: PracticeModeId;
+  from: string;
+  to: string;
+  label: string;
+  description: string;
+  weaknessAvailable: boolean;
+  edgePosition?: {
+    left: string;
+    top: string;
+  };
+}
+
+const PRACTICE_PATH_OPTIONS: PracticePathOption[] = [
+  {
+    id: 'mixed',
+    from: '全部',
+    to: '混合',
+    label: '综合练习',
+    description: '混合当前已启用的认知通路，适合日常热身和整体检查。',
+    weaknessAvailable: false,
+  },
+  {
+    id: 'board-to-note',
+    from: '指板位置',
+    to: '音名',
+    label: '位置 -> 音名',
+    description: '看到指板上的弦品位置后，快速反应它的音名。',
+    weaknessAvailable: true,
+    edgePosition: { left: '34%', top: '66%' },
+  },
+  {
+    id: 'board-to-solfeggio',
+    from: '指板位置',
+    to: '唱名',
+    label: '位置 -> 唱名',
+    description: '看到指板位置后，直接反应当前调里的首调唱名。',
+    weaknessAvailable: false,
+    edgePosition: { left: '50%', top: '84%' },
+  },
+  {
+    id: 'tab-to-note',
+    from: '六线谱',
+    to: '音名',
+    label: '六线谱 -> 音名',
+    description: '看到六线谱位置后，快速反应它在指板上的音名。',
+    weaknessAvailable: false,
+    edgePosition: { left: '48%', top: '38%' },
+  },
+  {
+    id: 'tab-to-solfeggio',
+    from: '六线谱',
+    to: '唱名',
+    label: '六线谱 -> 唱名',
+    description: '看到六线谱位置后，反应当前调里的首调唱名。',
+    weaknessAvailable: false,
+    edgePosition: { left: '66%', top: '38%' },
+  },
+  {
+    id: 'note-to-solfeggio',
+    from: '音名',
+    to: '唱名',
+    label: '音名 -> 唱名',
+    description: '看到音名后，快速反应它在当前调里的首调唱名。',
+    weaknessAvailable: false,
+    edgePosition: { left: '66%', top: '66%' },
+  },
+  {
+    id: 'note-to-positions',
+    from: '音名',
+    to: '指板位置',
+    label: '音名 -> 位置',
+    description: '看到音名后，在空指板上找出当前范围内的所有位置。',
+    weaknessAvailable: true,
+    edgePosition: { left: '34%', top: '52%' },
+  },
+];
 
 interface PositionPracticeStats {
   attempts: number;
@@ -114,6 +193,10 @@ function formatRange(config: MvpPracticeConfig): string {
 
 function getPracticeModeLabel(modeId: PracticeModeId): string {
   return PRACTICE_MODE_OPTIONS.find((mode) => mode.id === modeId)?.label ?? '综合练习';
+}
+
+function getPracticePathOption(modeId: PracticeModeId): PracticePathOption {
+  return PRACTICE_PATH_OPTIONS.find((path) => path.id === modeId) ?? PRACTICE_PATH_OPTIONS[0];
 }
 
 function formatPositions(positions: FretPosition[]): string {
@@ -383,6 +466,7 @@ function sortWeaknessEntries(entries: WeaknessMapEntry[]): WeaknessMapEntry[] {
 
 function App() {
   const [activeView, setActiveView] = useState<AppView>('practice');
+  const [practiceSubView, setPracticeSubView] = useState<PracticeSubView>('train');
   const [solfeggioDisplayMode, setSolfeggioDisplayMode] = useState<SolfeggioDisplayMode>(() => loadSolfeggioDisplayMode());
   const [markerMode, setMarkerMode] = useState<FretboardMarkerMode>('note');
   const [showOutOfKeyNotes, setShowOutOfKeyNotes] = useState(false);
@@ -485,7 +569,32 @@ function App() {
   }
 
   function handleModeChange(nextModeId: PracticeModeId): void {
+    const nextPath = getPracticePathOption(nextModeId);
+    setPracticeSubView((previous) => (previous === 'weakness' && nextPath.weaknessAvailable ? 'weakness' : 'train'));
     restartPractice(config.key, nextModeId);
+  }
+
+  function handlePracticePathSelect(nextModeId: PracticeModeId): void {
+    handleModeChange(nextModeId);
+  }
+
+  function handleStartPractice(): void {
+    setActiveView('practice');
+    setPracticeSubView('train');
+  }
+
+  function handlePracticeViewClick(): void {
+    setActiveView('practice');
+    setPracticeSubView('train');
+  }
+
+  function handleShowPracticeWeakness(): void {
+    if (!getPracticePathOption(config.modeId).weaknessAvailable) {
+      return;
+    }
+
+    setActiveView('practice');
+    setPracticeSubView('weakness');
   }
 
   function handleKeyChange(nextKey: PracticeKey): void {
@@ -744,26 +853,23 @@ function App() {
 
   return (
     <main className="min-h-screen bg-[#11131d] text-slate-100">
-      <div className="mx-auto flex min-h-screen w-full max-w-6xl flex-col gap-5 px-4 py-5">
-        <header className="flex flex-col gap-4 border-b border-white/10 pb-4 md:flex-row md:items-end md:justify-between">
-          <div>
-            <div className="flex flex-wrap items-center gap-2">
-              <p className="text-sm font-medium text-guitar-accent">Guitar Lab MVP</p>
+      <div className="mx-auto flex min-h-screen w-full max-w-6xl flex-col gap-4 px-4 py-3">
+        <header className="flex flex-col gap-3 border-b border-white/10 pb-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+            <div className="flex items-center gap-2">
+              <p className="text-sm font-semibold text-guitar-accent">Guitar Lab</p>
               <span className="rounded-md border border-white/10 bg-white/8 px-2 py-1 text-xs font-semibold text-slate-300">
                 v{APP_VERSION}
               </span>
             </div>
-            <h1 className="mt-1 text-2xl font-bold tracking-normal md:text-3xl">位置、音名、唱名反应训练</h1>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
-              先把开放把位里的位置和 G/C 大调唱名练熟。答题后会同时显示位置、音名和唱名，重点补强 G 大调 F#。
-            </p>
+            <h1 className="text-lg font-bold tracking-normal text-slate-50 md:text-xl">位置、音名、唱名反应训练</h1>
           </div>
 
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              onClick={() => setActiveView('practice')}
-              className={`h-10 rounded-md border px-4 text-sm font-semibold transition ${
+              onClick={handlePracticeViewClick}
+              className={`h-9 rounded-md border px-3 text-sm font-semibold transition ${
                 activeView === 'practice'
                   ? 'border-white bg-white text-slate-950'
                   : 'border-white/15 bg-white/10 text-slate-200 hover:bg-white/20'
@@ -773,32 +879,21 @@ function App() {
             </button>
             <button
               type="button"
-              onClick={() => setActiveView('memory')}
-              className={`h-10 rounded-md border px-4 text-sm font-semibold transition ${
-                activeView === 'memory'
+              onClick={() => setActiveView('reference')}
+              className={`h-9 rounded-md border px-3 text-sm font-semibold transition ${
+                activeView === 'reference'
                   ? 'border-white bg-white text-slate-950'
                   : 'border-white/15 bg-white/10 text-slate-200 hover:bg-white/20'
               }`}
             >
-              指板记忆
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveView('weakness')}
-              className={`h-10 rounded-md border px-4 text-sm font-semibold transition ${
-                activeView === 'weakness'
-                  ? 'border-white bg-white text-slate-950'
-                  : 'border-white/15 bg-white/10 text-slate-200 hover:bg-white/20'
-              }`}
-            >
-              弱点地图
+              速查
             </button>
             {KEY_OPTIONS.map((key) => (
               <button
                 key={key}
                 type="button"
                 onClick={() => handleKeyChange(key)}
-                className={`h-10 rounded-md border px-4 text-sm font-semibold transition ${
+                className={`h-9 rounded-md border px-3 text-sm font-semibold transition ${
                   config.key === key
                     ? 'border-guitar-accent bg-guitar-accent text-white'
                     : 'border-white/15 bg-white/10 text-slate-200 hover:bg-white/20'
@@ -814,15 +909,7 @@ function App() {
           </div>
         </header>
 
-        {activeView === 'weakness' ? (
-          <WeaknessMapView
-            practiceKey={config.key}
-            memory={practiceMemory}
-            solfeggioDisplayMode={solfeggioDisplayMode}
-            selectedPosition={selectedWeaknessPosition}
-            onPositionClick={handleWeaknessPositionClick}
-          />
-        ) : activeView === 'memory' ? (
+        {activeView === 'reference' ? (
           <FretboardMemoryView
             practiceKey={config.key}
             solfeggioDisplayMode={solfeggioDisplayMode}
@@ -835,110 +922,124 @@ function App() {
             onHoveredNoteChange={setHoveredMemoryNote}
             onPositionClick={handleMemoryPositionClick}
           />
-        ) : isFinished ? (
-          <section className="grid flex-1 place-items-center">
-            <div className="w-full max-w-2xl rounded-lg border border-white/10 bg-white/10 p-6">
-              <p className="text-sm text-slate-400">练习完成</p>
-              <h2 className="mt-2 text-2xl font-bold">本轮总结</h2>
-              <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                <SummaryItem label="正确率" value={formatPercent(summary.accuracy)} />
-                <SummaryItem label="平均反应" value={formatMs(summary.averageResponseMs)} />
-                <SummaryItem label="慢反应题" value={`${summary.slowCount} 题`} />
-                <SummaryItem
-                  label="F# 相关正确率"
-                  value={summary.focusAccuracy === null ? '暂无' : formatPercent(summary.focusAccuracy)}
-                />
-              </div>
-
-              {summary.weakest.length > 0 && (
-                <div className="mt-5 rounded-md bg-black/20 p-4">
-                  <p className="text-sm font-semibold text-slate-200">最需要巩固</p>
-                  <div className="mt-3 space-y-2">
-                    {summary.weakest.map((record) => (
-                      <p key={`${record.question.id}-${record.responseMs}`} className="text-sm text-slate-300">
-                        {formatPosition(record.question.position)}：{record.question.noteName} / {formatSolfeggio(record.question.solfeggio, solfeggioDisplayMode)}
-                        ，{record.isCorrect ? '答对但偏慢' : '答错'}，耗时 {formatMs(record.responseMs)}
-                      </p>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {memoryHighlights.length > 0 && (
-                <div className="mt-5 rounded-md border border-guitar-accent/30 bg-guitar-accent/10 p-4">
-                  <p className="text-sm font-semibold text-slate-100">本轮重点</p>
-                  <div className="mt-3 space-y-2">
-                    {memoryHighlights.map((highlight) => (
-                      <p key={highlight.itemKey} className="text-sm leading-6 text-slate-300">
-                        {highlight.label}：弱点分 {highlight.weaknessScore}
-                        {highlight.responseMs === null ? '' : `，最近 ${formatMs(highlight.responseMs)}`}
-                      </p>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              <div className="mt-5 rounded-md bg-black/20 p-4">
-                <p className="text-sm font-semibold text-slate-200">练习数据</p>
-                <p className="mt-2 text-sm leading-6 text-slate-400">
-                  数据保存在本机浏览器中，也可以导出 JSON 备份或交给 Codex 分析。
-                </p>
-                <div className="mt-3 grid gap-2 sm:grid-cols-3">
-                  <button
-                    type="button"
-                    onClick={handleExportPracticeMemory}
-                    className="h-10 rounded-md border border-white/15 bg-white/10 text-sm font-semibold text-slate-100 transition hover:bg-white/20"
-                  >
-                    导出 JSON
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => importInputRef.current?.click()}
-                    className="h-10 rounded-md border border-white/15 bg-white/10 text-sm font-semibold text-slate-100 transition hover:bg-white/20"
-                  >
-                    导入 JSON
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleClearPracticeMemory}
-                    className="h-10 rounded-md border border-rose-300/30 bg-rose-400/10 text-sm font-semibold text-rose-100 transition hover:bg-rose-400/20"
-                  >
-                    清空记忆
-                  </button>
-                </div>
-                <input
-                  ref={importInputRef}
-                  type="file"
-                  accept="application/json,.json"
-                  className="hidden"
-                  onChange={(event) => {
-                    const file = event.currentTarget.files?.[0];
-                    event.currentTarget.value = '';
-                    if (file !== undefined) {
-                      handleImportPracticeMemoryFile(file);
-                    }
-                  }}
-                />
-              </div>
-
-              <button
-                type="button"
-                onClick={() => restartPractice()}
-                className="mt-6 h-11 w-full rounded-md bg-white text-sm font-semibold text-slate-950 transition hover:bg-slate-200"
-              >
-                再练一轮
-              </button>
-            </div>
-          </section>
         ) : (
-          currentQuestion && (
-            <section className="grid flex-1 gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
-              <div className="space-y-5">
-                <PracticeModeSelector
-                  activeModeId={config.modeId}
-                  onModeChange={handleModeChange}
-                />
+          <div className="space-y-5">
+            <PracticePathSelector
+              activeModeId={config.modeId}
+              subView={practiceSubView}
+              solfeggioDisplayMode={solfeggioDisplayMode}
+              onPathSelect={handlePracticePathSelect}
+              onStartPractice={handleStartPractice}
+              onShowWeakness={handleShowPracticeWeakness}
+            />
+            {practiceSubView === 'weakness' ? (
+              <WeaknessMapView
+                practiceKey={config.key}
+                memory={practiceMemory}
+                solfeggioDisplayMode={solfeggioDisplayMode}
+                selectedPosition={selectedWeaknessPosition}
+                pathLabel={getPracticePathOption(config.modeId).label}
+                onPositionClick={handleWeaknessPositionClick}
+              />
+            ) : isFinished ? (
+              <section className="grid flex-1 place-items-center">
+                <div className="w-full max-w-2xl rounded-lg border border-white/10 bg-white/10 p-6">
+                  <p className="text-sm text-slate-400">练习完成</p>
+                  <h2 className="mt-2 text-2xl font-bold">本轮总结</h2>
+                  <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                    <SummaryItem label="正确率" value={formatPercent(summary.accuracy)} />
+                    <SummaryItem label="平均反应" value={formatMs(summary.averageResponseMs)} />
+                    <SummaryItem label="慢反应题" value={`${summary.slowCount} 题`} />
+                    <SummaryItem
+                      label="F# 相关正确率"
+                      value={summary.focusAccuracy === null ? '暂无' : formatPercent(summary.focusAccuracy)}
+                    />
+                  </div>
 
+                  {summary.weakest.length > 0 && (
+                    <div className="mt-5 rounded-md bg-black/20 p-4">
+                      <p className="text-sm font-semibold text-slate-200">最需要巩固</p>
+                      <div className="mt-3 space-y-2">
+                        {summary.weakest.map((record) => (
+                          <p key={`${record.question.id}-${record.responseMs}`} className="text-sm text-slate-300">
+                            {formatPosition(record.question.position)}：{record.question.noteName} / {formatSolfeggio(record.question.solfeggio, solfeggioDisplayMode)}
+                            ，{record.isCorrect ? '答对但偏慢' : '答错'}，耗时 {formatMs(record.responseMs)}
+                          </p>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {memoryHighlights.length > 0 && (
+                    <div className="mt-5 rounded-md border border-guitar-accent/30 bg-guitar-accent/10 p-4">
+                      <p className="text-sm font-semibold text-slate-100">本轮重点</p>
+                      <div className="mt-3 space-y-2">
+                        {memoryHighlights.map((highlight) => (
+                          <p key={highlight.itemKey} className="text-sm leading-6 text-slate-300">
+                            {highlight.label}：弱点分 {highlight.weaknessScore}
+                            {highlight.responseMs === null ? '' : `，最近 ${formatMs(highlight.responseMs)}`}
+                          </p>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="mt-5 rounded-md bg-black/20 p-4">
+                    <p className="text-sm font-semibold text-slate-200">练习数据</p>
+                    <p className="mt-2 text-sm leading-6 text-slate-400">
+                      数据保存在本机浏览器中，也可以导出 JSON 备份或交给 Codex 分析。
+                    </p>
+                    <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                      <button
+                        type="button"
+                        onClick={handleExportPracticeMemory}
+                        className="h-10 rounded-md border border-white/15 bg-white/10 text-sm font-semibold text-slate-100 transition hover:bg-white/20"
+                      >
+                        导出 JSON
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => importInputRef.current?.click()}
+                        className="h-10 rounded-md border border-white/15 bg-white/10 text-sm font-semibold text-slate-100 transition hover:bg-white/20"
+                      >
+                        导入 JSON
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleClearPracticeMemory}
+                        className="h-10 rounded-md border border-rose-300/30 bg-rose-400/10 text-sm font-semibold text-rose-100 transition hover:bg-rose-400/20"
+                      >
+                        清空记忆
+                      </button>
+                    </div>
+                    <input
+                      ref={importInputRef}
+                      type="file"
+                      accept="application/json,.json"
+                      className="hidden"
+                      onChange={(event) => {
+                        const file = event.currentTarget.files?.[0];
+                        event.currentTarget.value = '';
+                        if (file !== undefined) {
+                          handleImportPracticeMemoryFile(file);
+                        }
+                      }}
+                    />
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => restartPractice()}
+                    className="mt-6 h-11 w-full rounded-md bg-white text-sm font-semibold text-slate-950 transition hover:bg-slate-200"
+                  >
+                    再练一轮
+                  </button>
+                </div>
+              </section>
+            ) : (
+              currentQuestion && (
+                <section className="grid flex-1 gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
+                  <div className="space-y-5">
                 <div className="rounded-lg border border-white/10 bg-white/10 p-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
@@ -1058,8 +1159,10 @@ function App() {
                   <MiniStat label="正确率" value={records.length === 0 ? '-' : formatPercent(summary.accuracy)} />
                 </div>
               </aside>
-            </section>
-          )
+                </section>
+              )
+            )}
+          </div>
         )}
       </div>
     </main>
@@ -1074,36 +1177,274 @@ interface FeedbackPanelProps {
   onReplay: () => Promise<void>;
 }
 
-interface PracticeModeSelectorProps {
+interface PracticePathSelectorProps {
   activeModeId: PracticeModeId;
-  onModeChange: (modeId: PracticeModeId) => void;
+  subView: PracticeSubView;
+  solfeggioDisplayMode: SolfeggioDisplayMode;
+  onPathSelect: (modeId: PracticeModeId) => void;
+  onStartPractice: () => void;
+  onShowWeakness: () => void;
 }
 
-function PracticeModeSelector({ activeModeId, onModeChange }: PracticeModeSelectorProps) {
+function PracticePathSelector({
+  activeModeId,
+  subView,
+  solfeggioDisplayMode,
+  onPathSelect,
+  onStartPractice,
+  onShowWeakness,
+}: PracticePathSelectorProps) {
+  const activePath = getPracticePathOption(activeModeId);
+  const [isGraphOpen, setIsGraphOpen] = useState(false);
+
+  function handleGraphPathSelect(modeId: PracticeModeId): void {
+    onPathSelect(modeId);
+    setIsGraphOpen(false);
+  }
+
   return (
-    <div className="rounded-lg border border-white/10 bg-white/10 p-4">
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div>
-          <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Practice Mode</p>
-          <h2 className="mt-1 text-lg font-semibold">练习模式</h2>
+    <div className="rounded-md border border-white/10 bg-white/5 px-3 py-2">
+      <div className="flex flex-col gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-lg font-semibold">练习模式</h2>
+            <button
+              type="button"
+              onClick={() => setIsGraphOpen(true)}
+              className="h-7 rounded-md border border-white/15 bg-white/8 px-2 text-xs font-semibold text-slate-200 transition hover:bg-white/15"
+            >
+              图选
+            </button>
+          </div>
+
+          <div className="flex w-fit overflow-hidden rounded-md border border-white/15 bg-black/20" role="tablist" aria-label="当前通路视图">
+            <button
+              type="button"
+              onClick={onStartPractice}
+              role="tab"
+              aria-selected={subView === 'train'}
+              className={`h-8 px-3 text-sm font-semibold transition ${
+                subView === 'train'
+                  ? 'bg-white text-slate-950'
+                  : 'text-slate-100 hover:bg-white/15'
+              }`}
+            >
+              练习
+            </button>
+            <button
+              type="button"
+              onClick={onShowWeakness}
+              disabled={!activePath.weaknessAvailable}
+              role="tab"
+              aria-selected={subView === 'weakness' && activePath.weaknessAvailable}
+              className={`h-8 border-l border-white/15 px-3 text-sm font-semibold transition ${
+                subView === 'weakness' && activePath.weaknessAvailable
+                  ? 'bg-guitar-accent text-white'
+                  : activePath.weaknessAvailable
+                    ? 'text-slate-100 hover:bg-white/15'
+                    : 'cursor-not-allowed text-slate-500'
+              }`}
+            >
+              {activePath.weaknessAvailable ? '查看弱点' : '暂无弱点'}
+            </button>
+          </div>
         </div>
 
         <div className="flex flex-wrap gap-2">
-          {PRACTICE_MODE_OPTIONS.map((mode) => (
+          {PRACTICE_PATH_OPTIONS.map((path) => (
             <button
-              key={mode.id}
+              key={path.id}
               type="button"
-              onClick={() => onModeChange(mode.id)}
-              className={`h-9 rounded-md border px-3 text-sm font-semibold transition ${
-                activeModeId === mode.id
+              onClick={() => onPathSelect(path.id)}
+              title={path.description}
+              className={`h-8 rounded-md border px-3 text-sm font-semibold transition ${
+                activeModeId === path.id
                   ? 'border-guitar-accent bg-guitar-accent text-white'
                   : 'border-white/15 bg-white/8 text-slate-200 hover:bg-white/15'
               }`}
+              aria-pressed={activeModeId === path.id}
             >
-              {mode.label}
+              {getPracticeModeLabel(path.id)}
             </button>
           ))}
         </div>
+      </div>
+
+      {isGraphOpen && (
+        <PracticePathGraphDialog
+          activeModeId={activeModeId}
+          solfeggioDisplayMode={solfeggioDisplayMode}
+          onPathSelect={handleGraphPathSelect}
+          onClose={() => setIsGraphOpen(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+interface PracticePathGraphDialogProps {
+  activeModeId: PracticeModeId;
+  solfeggioDisplayMode: SolfeggioDisplayMode;
+  onPathSelect: (modeId: PracticeModeId) => void;
+  onClose: () => void;
+}
+
+function PracticePathGraphDialog({
+  activeModeId,
+  solfeggioDisplayMode,
+  onPathSelect,
+  onClose,
+}: PracticePathGraphDialogProps) {
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 px-4 py-6">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="练习通路图"
+        className="max-h-[92vh] w-full max-w-5xl overflow-auto rounded-lg border border-white/15 bg-[#202330] p-4 shadow-2xl"
+      >
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Path Graph</p>
+            <h2 className="mt-1 text-xl font-bold text-slate-50">选择练习通路</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-400">
+              在图上点击一条边，切换要强化的认知反应路径。
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="h-9 rounded-md border border-white/15 bg-white/10 px-3 text-sm font-semibold text-slate-100 transition hover:bg-white/20"
+          >
+            关闭
+          </button>
+        </div>
+
+        <PracticePathGraph
+          activeModeId={activeModeId}
+          solfeggioDisplayMode={solfeggioDisplayMode}
+          onPathSelect={onPathSelect}
+        />
+      </div>
+    </div>
+  );
+}
+
+interface PracticePathGraphProps {
+  activeModeId: PracticeModeId;
+  solfeggioDisplayMode: SolfeggioDisplayMode;
+  onPathSelect: (modeId: PracticeModeId) => void;
+}
+
+function PracticePathGraph({ activeModeId, solfeggioDisplayMode, onPathSelect }: PracticePathGraphProps) {
+  return (
+    <div className="relative mt-4 min-h-[520px] overflow-hidden rounded-lg border border-white/10 bg-[#151724] p-3">
+      <svg
+        viewBox="0 0 900 520"
+        className="absolute inset-0 h-full w-full"
+        aria-hidden="true"
+      >
+        <defs>
+          <marker id="practice-arrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+            <path d="M 0 0 L 8 4 L 0 8 z" fill="#64748b" />
+          </marker>
+          <marker id="practice-arrow-active" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+            <path d="M 0 0 L 8 4 L 0 8 z" fill="#ff4f7b" />
+          </marker>
+        </defs>
+        <PracticePathLine active={activeModeId === 'tab-to-note'} d="M 450 122 L 450 320" />
+        <PracticePathLine active={activeModeId === 'tab-to-solfeggio'} d="M 475 122 C 615 170 700 225 735 320" />
+        <PracticePathLine active={activeModeId === 'board-to-note'} d="M 230 360 L 410 360" />
+        <PracticePathLine active={activeModeId === 'note-to-positions'} d="M 410 316 C 320 245 260 245 230 316" />
+        <PracticePathLine active={activeModeId === 'note-to-solfeggio'} d="M 490 360 L 670 360" />
+        <PracticePathLine active={activeModeId === 'board-to-solfeggio'} d="M 220 400 C 390 490 555 490 720 400" />
+      </svg>
+
+      <PracticeGraphNode left="50%" top="16%" label="六线谱" helper="六条线" />
+      <PracticeGraphNode left="20%" top="70%" label="指板位置" helper="弦 + 品" />
+      <PracticeGraphNode left="50%" top="70%" label="音名" helper="C D E" />
+      <PracticeGraphNode
+        left="80%"
+        top="70%"
+        label="唱名"
+        helper={solfeggioDisplayMode === 'number' ? '1 2 3' : 'Do Re Mi'}
+      />
+
+      <button
+        type="button"
+        onClick={() => onPathSelect('mixed')}
+        className={`absolute bottom-4 left-4 z-30 h-10 rounded-md border px-4 text-sm font-semibold transition ${
+          activeModeId === 'mixed'
+            ? 'border-guitar-accent bg-guitar-accent text-white'
+            : 'border-white/15 bg-white/10 text-slate-100 hover:bg-white/20'
+        }`}
+        aria-pressed={activeModeId === 'mixed'}
+      >
+        综合练习
+      </button>
+
+      {PRACTICE_PATH_OPTIONS
+        .filter((path) => path.edgePosition !== undefined)
+        .map((path) => (
+          <button
+            key={path.id}
+            type="button"
+            onClick={() => onPathSelect(path.id)}
+            title={path.description}
+            className={`absolute z-30 min-h-9 max-w-[130px] -translate-x-1/2 -translate-y-1/2 rounded-md border px-2 py-1 text-xs font-semibold leading-4 shadow-lg transition ${
+              activeModeId === path.id
+                ? 'border-guitar-accent bg-guitar-accent text-white'
+                : 'border-white/15 bg-[#222637] text-slate-100 hover:border-white/35 hover:bg-[#2d3248]'
+            }`}
+            style={{
+              left: path.edgePosition?.left,
+              top: path.edgePosition?.top,
+            }}
+            aria-pressed={activeModeId === path.id}
+            aria-label={`选择通路：${path.label}`}
+          >
+            {path.label}
+          </button>
+        ))}
+    </div>
+  );
+}
+
+interface PracticePathLineProps {
+  active: boolean;
+  d: string;
+}
+
+function PracticePathLine({ active, d }: PracticePathLineProps) {
+  return (
+    <path
+      d={d}
+      fill="none"
+      stroke={active ? '#ff4f7b' : '#64748b'}
+      strokeWidth={active ? 4 : 2}
+      strokeLinecap="round"
+      markerEnd={active ? 'url(#practice-arrow-active)' : 'url(#practice-arrow)'}
+      opacity={active ? 1 : 0.62}
+    />
+  );
+}
+
+interface PracticeGraphNodeProps {
+  left: string;
+  top: string;
+  label: string;
+  helper: string;
+}
+
+function PracticeGraphNode({ left, top, label, helper }: PracticeGraphNodeProps) {
+  return (
+    <div
+      className="pointer-events-none absolute z-20 grid h-[72px] w-[116px] -translate-x-1/2 -translate-y-1/2 place-items-center rounded-lg border border-white/15 bg-[#232738] px-3 text-center shadow-xl"
+      style={{ left, top }}
+    >
+      <div>
+        <p className="text-sm font-bold text-slate-50">{label}</p>
+        <p className="mt-1 text-xs text-slate-500">{helper}</p>
       </div>
     </div>
   );
@@ -1145,7 +1486,7 @@ function SolfeggioDisplayModeSelector({ activeMode, onModeChange }: SolfeggioDis
   ];
 
   return (
-    <div className="flex h-10 overflow-hidden rounded-md border border-white/15 bg-white/8">
+    <div className="flex h-9 overflow-hidden rounded-md border border-white/15 bg-white/8">
       {options.map((option) => (
         <button
           key={option.id}
@@ -1437,6 +1778,7 @@ interface WeaknessMapViewProps {
   memory: PracticeMemoryDocumentV1;
   solfeggioDisplayMode: SolfeggioDisplayMode;
   selectedPosition: FretPosition | null;
+  pathLabel: string;
   onPositionClick: (position: FretPosition) => void;
 }
 
@@ -1485,6 +1827,7 @@ function WeaknessMapView({
   memory,
   solfeggioDisplayMode,
   selectedPosition,
+  pathLabel,
   onPositionClick,
 }: WeaknessMapViewProps) {
   const entries = getWeaknessEntries(memory, practiceKey);
@@ -1514,11 +1857,11 @@ function WeaknessMapView({
               <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Weakness Map</p>
               <h2 className="mt-2 text-xl font-semibold">随时查看的弱点地图</h2>
               <p className="mt-2 text-sm leading-6 text-slate-400">
-                根据近期练习事件展示当前调性的音名定位压力。暖色代表近期相对更需要关注；历史慢错仍保留在详情里。
+                根据近期练习事件展示当前通路的指板位置压力。暖色代表近期相对更需要关注；历史慢错仍保留在详情里。
               </p>
             </div>
             <div className="rounded-md bg-black/25 px-3 py-2 text-sm text-slate-300">
-              {practiceKey === 'G major' ? 'G 大调' : 'C 大调'} · 0-{fretRange[1]} 品 · 音名定位
+              {practiceKey === 'G major' ? 'G 大调' : 'C 大调'} · 0-{fretRange[1]} 品 · {pathLabel}
             </div>
           </div>
 

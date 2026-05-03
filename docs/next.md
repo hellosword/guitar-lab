@@ -20,8 +20,6 @@
 - **内容**：把“音名 → 唱名”升级为核心练习能力，逐项讨论后再实现
   - 补充规格：定义 `note-to-solfeggio` 的统计单位为 `key + noteName -> solfeggio`
   - 自适应出题：按“音名静态弱点权重 + 本轮动态覆盖权重”选择下一题，出过的音名清空本轮动态权重
-  - 全局唱名显示模式：支持 `Do Re Mi Fa Sol La Si` 与 `1 2 3 4 5 6 7` 两种模式，并影响练习、反馈、指板记忆、映射面板和弱点地图
-  - 布局优化：将音名题目放在上方，唱名/级数答案放在下方，避免当前“题目左下、答案右上”的割裂感
   - 弱点地图扩展：增加“音名 → 唱名”映射弱点区，不硬塞进指板热图，使用近期压力分与相对分位显示
   - 测试覆盖：显示模式切换、布局结构、自适应出题、弱点地图映射区和既有题型不回退
 - **预期产出**：分阶段完成 `note-to-solfeggio` 的规格、全局显示模式、交互布局、自适应调度与弱点地图支持
@@ -109,3 +107,12 @@
 | 2026-05-03 | v0.0.15 | 练习页统一题目/作答布局：所有单选题答案区移到题面下方，右侧保留详情、播放、反馈和统计 | `src/App.tsx`、`tests/e2e/mvp-practice.spec.ts` |
 | 2026-05-03 | v0.0.16 | 练习节奏统一优化：所有题型答对后短暂停顿自动下一题，并移除六线谱题额外重复的指板位置面板 | `src/App.tsx`、`src/modules/fretboard-game/practiceInteractionConfig.ts`、`tests/e2e/mvp-practice.spec.ts` |
 | 2026-05-03 | v0.0.17 | 答对自动进入下一题节奏调优：延迟从 800ms 缩短到 600ms | `src/modules/fretboard-game/practiceInteractionConfig.ts` |
+| 2026-05-03 | 文档期 | 练习通路式交互框架规格：练习/速查主行为、通路图选择器与通路级弱点入口 | `docs/product/practice-path-interaction-framework-spec.md` |
+| 2026-05-03 | v0.0.18 | 练习通路式交互框架第一版：练习/速查主导航、通路图选择器、通路级开始练习与弱点入口 | `src/App.tsx`、`docs/product/practice-path-interaction-framework-spec.md`、`tests/e2e/mvp-practice.spec.ts` |
+| 2026-05-03 | v0.0.19 | 练习通路布局校准：日常页恢复紧凑题型按钮，通路 graph 改为“图选”弹窗 | `src/App.tsx`、`docs/product/practice-path-interaction-framework-spec.md`、`tests/e2e/mvp-practice.spec.ts` |
+| 2026-05-03 | v0.0.20 | 图选弹窗布局校准：放大 graph、移除右侧 Current Path 面板、综合练习入口移入图内角落 | `src/App.tsx`、`docs/product/practice-path-interaction-framework-spec.md`、`tests/e2e/mvp-practice.spec.ts` |
+| 2026-05-03 | v0.0.21 | 练习模式区层级校准：先选模式，再在当前通路下切换开始练习/查看弱点 | `src/App.tsx`、`docs/product/practice-path-interaction-framework-spec.md` |
+| 2026-05-03 | v0.0.22 | 练习模式说明去重：移除当前通路说明块，改用模式按钮 tooltip 承载说明 | `src/App.tsx`、`docs/product/practice-path-interaction-framework-spec.md`、`tests/e2e/mvp-practice.spec.ts` |
+| 2026-05-03 | v0.0.23 | 图选入口收纳：将“图选”移到练习模式标题旁，模式按钮行只保留真实练习模式 | `src/App.tsx`、`docs/product/practice-path-interaction-framework-spec.md` |
+| 2026-05-03 | v0.0.24 | 通路视图 tab 化：将练习/查看弱点改为同一通路下的 tab，并统一下方内容区布局 | `src/App.tsx`、`docs/product/practice-path-interaction-framework-spec.md`、`tests/e2e/mvp-practice.spec.ts` |
+| 2026-05-03 | v0.0.25 | 日常练习密度优化：压缩顶部 Header 和练习模式工具栏，让题目与作答区更早进入首屏 | `src/App.tsx`、`docs/product/practice-path-interaction-framework-spec.md`、`tests/e2e/mvp-practice.spec.ts` |
