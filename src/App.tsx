@@ -1350,7 +1350,7 @@ function App() {
             onPositionClick={handleMemoryPositionClick}
           />
         ) : (
-          <div className="space-y-5">
+          <div className="min-w-0 space-y-5">
             <PracticePathSelector
               activeModeId={config.modeId}
               subView={practiceSubView}
@@ -1466,8 +1466,8 @@ function App() {
               </section>
             ) : (
               currentQuestion && (
-                <section className="grid flex-1 gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
-                  <div className="space-y-5">
+                <section className="grid min-w-0 flex-1 gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
+                  <div className="min-w-0 space-y-5">
                 <div className="rounded-lg border border-white/10 bg-white/10 p-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
@@ -1482,7 +1482,7 @@ function App() {
                   </div>
                 </div>
 
-                <div className="rounded-lg border border-white/10 bg-white/10 p-4">
+                <div className="overflow-x-auto rounded-lg border border-white/10 bg-white/10 p-4">
                   {currentQuestion.sourceMedium === 'board' && (
                     <Fretboard
                       fretCount={config.fretRange[1]}
@@ -1524,7 +1524,7 @@ function App() {
                 </div>
 
                 {currentQuestion.answerKind === 'positions' && (
-                  <div className="rounded-lg border border-white/10 bg-white/10 p-4">
+                  <div className="overflow-x-auto rounded-lg border border-white/10 bg-white/10 p-4">
                     <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
                       <div>
                         <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Answer</p>
@@ -1836,29 +1836,33 @@ interface PracticePathGraphProps {
 
 function PracticePathGraph({ activeModeId, solfeggioDisplayMode, onPathSelect }: PracticePathGraphProps) {
   return (
-    <div className="relative mt-4 min-h-[520px] overflow-hidden rounded-lg border border-white/10 bg-[#151724] p-3">
-      <svg
-        viewBox="0 0 900 520"
-        className="absolute inset-0 h-full w-full"
-        aria-hidden="true"
-      >
-        <defs>
-          <marker id="practice-arrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
-            <path d="M 0 0 L 8 4 L 0 8 z" fill="#64748b" />
-          </marker>
-          <marker id="practice-arrow-active" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
-            <path d="M 0 0 L 8 4 L 0 8 z" fill="#ff4f7b" />
-          </marker>
-        </defs>
-        <PracticePathLine active={activeModeId === 'tab-to-note'} d="M 450 124 L 450 286" />
-        <PracticePathLine active={activeModeId === 'tab-to-solfeggio'} d="M 508 106 C 650 128 735 190 750 286" />
-        <PracticePathLine active={activeModeId === 'note-to-positions'} d="M 392 300 L 208 300" />
-        <PracticePathLine active={activeModeId === 'board-to-note'} d="M 208 340 L 392 340" />
-        <PracticePathLine active={activeModeId === 'solfeggio-to-note'} d="M 692 300 L 508 300" />
-        <PracticePathLine active={activeModeId === 'note-to-solfeggio'} d="M 508 340 L 692 340" />
-        <PracticePathLine active={activeModeId === 'board-to-solfeggio'} d="M 150 374 C 280 432 620 432 750 374" />
-        <PracticePathLine active={activeModeId === 'solfeggio-to-positions'} d="M 750 374 C 620 486 280 486 150 374" />
-      </svg>
+    <div
+      className="mt-4 overflow-x-auto rounded-lg border border-white/10 bg-[#151724]"
+      data-testid="practice-path-graph-scroll"
+    >
+      <div className="relative min-h-[520px] w-full min-w-[760px] p-3 sm:min-w-0">
+        <svg
+          viewBox="0 0 900 520"
+          className="absolute inset-0 h-full w-full"
+          aria-hidden="true"
+        >
+          <defs>
+            <marker id="practice-arrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+              <path d="M 0 0 L 8 4 L 0 8 z" fill="#64748b" />
+            </marker>
+            <marker id="practice-arrow-active" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+              <path d="M 0 0 L 8 4 L 0 8 z" fill="#ff4f7b" />
+            </marker>
+          </defs>
+          <PracticePathLine active={activeModeId === 'tab-to-note'} d="M 450 124 L 450 286" />
+          <PracticePathLine active={activeModeId === 'tab-to-solfeggio'} d="M 508 106 C 650 128 735 190 750 286" />
+          <PracticePathLine active={activeModeId === 'note-to-positions'} d="M 392 300 L 208 300" />
+          <PracticePathLine active={activeModeId === 'board-to-note'} d="M 208 340 L 392 340" />
+          <PracticePathLine active={activeModeId === 'solfeggio-to-note'} d="M 692 300 L 508 300" />
+          <PracticePathLine active={activeModeId === 'note-to-solfeggio'} d="M 508 340 L 692 340" />
+          <PracticePathLine active={activeModeId === 'board-to-solfeggio'} d="M 150 374 C 280 432 620 432 750 374" />
+          <PracticePathLine active={activeModeId === 'solfeggio-to-positions'} d="M 750 374 C 620 486 280 486 150 374" />
+        </svg>
 
       <PracticeGraphNode left="50%" top="17%" label="六线谱" helper="六条线" />
       <PracticeGraphNode left="17%" top="65%" label="指板位置" helper="弦 + 品" />
@@ -1906,6 +1910,7 @@ function PracticePathGraph({ activeModeId, solfeggioDisplayMode, onPathSelect }:
             {path.label}
           </button>
         ))}
+      </div>
     </div>
   );
 }
@@ -2181,8 +2186,8 @@ function FretboardMemoryView({
   }
 
   return (
-    <section className="grid flex-1 gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
-      <div className="space-y-5">
+    <section className="grid min-w-0 flex-1 gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
+      <div className="min-w-0 space-y-5">
         <div className="rounded-lg border border-white/10 bg-white/10 p-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
@@ -2232,7 +2237,7 @@ function FretboardMemoryView({
           )}
         </div>
 
-        <div className="rounded-lg border border-white/10 bg-white/10 p-4">
+        <div className="overflow-x-auto rounded-lg border border-white/10 bg-white/10 p-4">
           <Fretboard
             fretCount={5}
             selectedPositions={selectedPosition === null ? [] : [selectedPosition]}
@@ -2410,8 +2415,8 @@ function NoteSolfeggioWeaknessView({
   }
 
   return (
-    <section className="grid flex-1 gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
-      <div className="space-y-5">
+    <section className="grid min-w-0 flex-1 gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
+      <div className="min-w-0 space-y-5">
         <div className="rounded-lg border border-white/10 bg-white/10 p-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
@@ -2433,7 +2438,7 @@ function NoteSolfeggioWeaknessView({
           </div>
         </div>
 
-        <div className="rounded-lg border border-white/10 bg-white/10 p-4">
+        <div className="overflow-x-auto rounded-lg border border-white/10 bg-white/10 p-4">
           {entries.length === 0 ? (
             <div className="grid min-h-[220px] place-items-center rounded-lg bg-black/20 px-5 text-center">
               <div>
@@ -2613,9 +2618,9 @@ function WeaknessMapView({
   }
 
   return (
-    <section className="grid flex-1 gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
-      <div className="space-y-5">
-        <div className="rounded-lg border border-white/10 bg-white/10 p-4">
+    <section className="grid min-w-0 flex-1 gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
+      <div className="min-w-0 space-y-5">
+        <div className="overflow-x-auto rounded-lg border border-white/10 bg-white/10 p-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Weakness Map</p>
@@ -2636,7 +2641,7 @@ function WeaknessMapView({
           </div>
         </div>
 
-        <div className="rounded-lg border border-white/10 bg-white/10 p-4">
+        <div className="overflow-x-auto rounded-lg border border-white/10 bg-white/10 p-4">
           {entries.length === 0 ? (
             <div className="grid min-h-[220px] place-items-center rounded-lg bg-black/20 px-5 text-center">
               <div>

@@ -50,6 +50,8 @@ test('MVP 练习页可见并能完成一道音名题', async ({ page }) => {
   await page.goto('/');
 
   await expect(page.getByRole('heading', { name: '位置、音名、唱名反应训练' })).toBeVisible();
+  const hasHorizontalPageOverflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1);
+  expect(hasHorizontalPageOverflow).toBe(false);
   await expect(page.getByText('v0.0.35')).toBeVisible();
   await expect(page.getByRole('button', { name: 'G 大调' })).toBeVisible();
   await expect(page.getByRole('button', { name: '速查' })).toBeVisible();
@@ -69,6 +71,11 @@ test('MVP 练习页可见并能完成一道音名题', async ({ page }) => {
   await page.getByRole('button', { name: '图选' }).click();
   const pathDialog = page.getByRole('dialog', { name: '练习通路图' });
   await expect(pathDialog).toBeVisible();
+  const graphMetrics = await pathDialog.getByTestId('practice-path-graph-scroll').evaluate((element) => ({
+    clientWidth: element.clientWidth,
+    scrollWidth: element.scrollWidth,
+  }));
+  expect(graphMetrics.scrollWidth).toBeGreaterThanOrEqual(graphMetrics.clientWidth);
   await expect(pathDialog.getByText('Current Path')).toHaveCount(0);
   await expect(pathDialog.getByRole('button', { name: '综合练习' })).toBeVisible();
   await expect(pathDialog.getByText('指板位置')).toBeVisible();

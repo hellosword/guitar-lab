@@ -107,7 +107,7 @@ export default function Fretboard({
   return (
     <svg
       viewBox={`0 0 ${width} ${height}`}
-      className={`w-full ${onPositionClick !== undefined ? 'cursor-pointer' : ''}`}
+      className={`w-full min-w-[520px] sm:min-w-0 ${onPositionClick !== undefined ? 'cursor-pointer touch-manipulation' : ''}`}
       role="img"
       aria-label="吉他指板"
       onClick={handleSvgClick}
