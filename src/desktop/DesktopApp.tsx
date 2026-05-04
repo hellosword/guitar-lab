@@ -835,11 +835,31 @@ function saveGuitarTone(toneId: GuitarToneId): void {
   window.localStorage.setItem(GUITAR_TONE_STORAGE_KEY, toneId);
 }
 
+function useIsDesktopLayout(): boolean {
+  const [isDesktopLayout, setIsDesktopLayout] = useState(() => (
+    typeof window === 'undefined' ? true : window.matchMedia('(min-width: 1024px)').matches
+  ));
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(min-width: 1024px)');
+    const handleChange = () => setIsDesktopLayout(mediaQuery.matches);
+
+    handleChange();
+    mediaQuery.addEventListener('change', handleChange);
+
+    return () => mediaQuery.removeEventListener('change', handleChange);
+  }, []);
+
+  return isDesktopLayout;
+}
+
 function App() {
+  const isDesktopLayout = useIsDesktopLayout();
   const [activeView, setActiveView] = useState<AppView>('practice');
   const [practiceSubView, setPracticeSubView] = useState<PracticeSubView>('train');
   const [solfeggioDisplayMode, setSolfeggioDisplayMode] = useState<SolfeggioDisplayMode>(() => loadSolfeggioDisplayMode());
   const [guitarTone, setGuitarTone] = useState<GuitarToneId>(() => loadGuitarTone());
+  const [isMobileSettingsOpen, setIsMobileSettingsOpen] = useState(false);
   const [markerMode, setMarkerMode] = useState<FretboardMarkerMode>('note');
   const [showOutOfKeyNotes, setShowOutOfKeyNotes] = useState(false);
   const [selectedMemoryPosition, setSelectedMemoryPosition] = useState<FretPosition | null>(null);
@@ -1268,9 +1288,43 @@ function App() {
     playFretboardPosition(position);
   }
 
+  const activePath = getPracticePathOption(config.modeId);
+  const mobileViewLabel = activeView === 'reference'
+    ? '指板速查'
+    : practiceSubView === 'weakness'
+      ? '弱点地图'
+      : activePath.label;
+
   return (
     <main className="min-h-screen bg-[#11131d] text-slate-100">
-      <div className="mx-auto flex min-h-screen w-full max-w-6xl flex-col gap-4 px-4 py-3">
+      <div className="mx-auto flex min-h-screen w-full max-w-6xl flex-col gap-4 px-3 pb-24 pt-3 lg:px-4 lg:pb-3">
+        {!isDesktopLayout && (
+        <header className="sticky top-0 z-30 -mx-3 border-b border-white/10 bg-[#11131d]/95 px-3 pb-3 pt-1 backdrop-blur">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-semibold text-guitar-accent">Guitar Lab</p>
+                <span className="rounded-md border border-white/10 bg-white/8 px-2 py-1 text-xs font-semibold text-slate-300">
+                  v{APP_VERSION}
+                </span>
+              </div>
+              <h1 className="mt-2 truncate text-xl font-bold text-slate-50">{mobileViewLabel}</h1>
+              <p className="mt-1 text-sm text-slate-400">
+                {config.key === 'G major' ? 'G 大调' : 'C 大调'} · {formatRange(config)}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsMobileSettingsOpen(true)}
+              className="h-10 shrink-0 rounded-md border border-white/15 bg-white/10 px-4 text-sm font-semibold text-slate-100"
+            >
+              设置
+            </button>
+          </div>
+        </header>
+        )}
+
+        {isDesktopLayout && (
         <header className="flex flex-col gap-3 border-b border-white/10 pb-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
             <div className="flex items-center gap-2">
@@ -1335,6 +1389,7 @@ function App() {
             />
           </div>
         </header>
+        )}
 
         {activeView === 'reference' ? (
           <FretboardMemoryView
@@ -1351,14 +1406,18 @@ function App() {
           />
         ) : (
           <div className="min-w-0 space-y-5">
-            <PracticePathSelector
-              activeModeId={config.modeId}
-              subView={practiceSubView}
-              solfeggioDisplayMode={solfeggioDisplayMode}
-              onPathSelect={handlePracticePathSelect}
-              onStartPractice={handleStartPractice}
-              onShowWeakness={handleShowPracticeWeakness}
-            />
+            {isDesktopLayout && (
+            <div>
+              <PracticePathSelector
+                activeModeId={config.modeId}
+                subView={practiceSubView}
+                solfeggioDisplayMode={solfeggioDisplayMode}
+                onPathSelect={handlePracticePathSelect}
+                onStartPractice={handleStartPractice}
+                onShowWeakness={handleShowPracticeWeakness}
+              />
+            </div>
+            )}
             {practiceSubView === 'weakness' ? (
               <WeaknessMapView
                 modeId={config.modeId}
@@ -1466,8 +1525,8 @@ function App() {
               </section>
             ) : (
               currentQuestion && (
-                <section className="grid min-w-0 flex-1 gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
-                  <div className="min-w-0 space-y-5">
+                <section className="grid min-w-0 flex-1 gap-3 lg:gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
+                  <div className="min-w-0 space-y-3 lg:space-y-5">
                 <div className="rounded-lg border border-white/10 bg-white/10 p-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
@@ -1494,7 +1553,7 @@ function App() {
                     <Tablature position={currentQuestion.position} />
                   )}
                   {currentQuestion.sourceMedium === 'note' && (
-                    <div className="grid min-h-[220px] place-items-center rounded-lg bg-[#171420]">
+                    <div className="grid min-h-[180px] place-items-center rounded-lg bg-[#171420] sm:min-h-[220px]">
                       <div className="text-center">
                         <p className="text-sm text-slate-500">音名</p>
                         <p className="mt-3 text-7xl font-bold text-white">{currentQuestion.noteName}</p>
@@ -1507,7 +1566,7 @@ function App() {
                     </div>
                   )}
                   {currentQuestion.sourceMedium === 'solfeggio' && (
-                    <div className="grid min-h-[220px] place-items-center rounded-lg bg-[#171420]">
+                    <div className="grid min-h-[180px] place-items-center rounded-lg bg-[#171420] sm:min-h-[220px]">
                       <div className="text-center">
                         <p className="text-sm text-slate-500">唱名</p>
                         <p className="mt-3 text-7xl font-bold text-white">
@@ -1555,8 +1614,48 @@ function App() {
                     )}
                   </PracticeAnswerPanel>
                 )}
+
+                {!isDesktopLayout && (
+                <div className="space-y-3 rounded-lg border border-white/10 bg-[#171a27] p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-200">练习详情</p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        {records.length} 已答 · 正确率 {records.length === 0 ? '-' : formatPercent(summary.accuracy)}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={replayCurrentPitch}
+                      className="h-10 rounded-md border border-white/15 bg-white/8 px-4 text-sm font-semibold text-slate-100 transition hover:bg-white/15"
+                    >
+                      播放音高
+                    </button>
+                  </div>
+
+                  {currentQuestion.answerKind === 'positions' && (
+                    <PositionHuntPanel
+                      foundCount={selectedAnswerPositions.length}
+                      targetCount={positionsToClick.length}
+                      masteredCount={masteredAnswerPositions.length}
+                      isComplete={answeredRecord !== null}
+                    />
+                  )}
+
+                  {answeredRecord && (
+                    <FeedbackPanel
+                      record={answeredRecord}
+                      solfeggioDisplayMode={solfeggioDisplayMode}
+                      onNext={goToNextQuestion}
+                      onReplay={() => playPositionPitch(answeredRecord.question.position, guitarTone)}
+                      isLast={currentIndex === questions.length - 1}
+                    />
+                  )}
+                </div>
+                )}
               </div>
 
+              {isDesktopLayout && (
               <aside className="flex flex-col gap-4 rounded-lg border border-white/10 bg-[#171a27] p-4">
                 <div>
                   <p className="text-sm font-semibold text-slate-200">练习详情</p>
@@ -1602,13 +1701,351 @@ function App() {
                   <MiniStat label="正确率" value={records.length === 0 ? '-' : formatPercent(summary.accuracy)} />
                 </div>
               </aside>
+              )}
                 </section>
               )
             )}
           </div>
         )}
       </div>
+      {!isDesktopLayout && (
+        <>
+          <MobileBottomNavigation
+            activeView={activeView}
+            subView={practiceSubView}
+            weaknessAvailable={activePath.weaknessAvailable}
+            onPracticeClick={handlePracticeViewClick}
+            onReferenceClick={() => setActiveView('reference')}
+            onWeaknessClick={handleShowPracticeWeakness}
+          />
+          <MobilePracticeSettingsSheet
+            isOpen={isMobileSettingsOpen}
+            activeModeId={config.modeId}
+            activeKey={config.key}
+            subView={practiceSubView}
+            solfeggioDisplayMode={solfeggioDisplayMode}
+            guitarTone={guitarTone}
+            buildLabel={BUILD_LABEL}
+            onClose={() => setIsMobileSettingsOpen(false)}
+            onPathSelect={handlePracticePathSelect}
+            onStartPractice={handleStartPractice}
+            onShowWeakness={handleShowPracticeWeakness}
+            onKeyChange={handleKeyChange}
+            onSolfeggioDisplayModeChange={setSolfeggioDisplayMode}
+            onGuitarToneChange={setGuitarTone}
+          />
+        </>
+      )}
     </main>
+  );
+}
+
+interface MobileBottomNavigationProps {
+  activeView: AppView;
+  subView: PracticeSubView;
+  weaknessAvailable: boolean;
+  onPracticeClick: () => void;
+  onReferenceClick: () => void;
+  onWeaknessClick: () => void;
+}
+
+function MobileBottomNavigation({
+  activeView,
+  subView,
+  weaknessAvailable,
+  onPracticeClick,
+  onReferenceClick,
+  onWeaknessClick,
+}: MobileBottomNavigationProps) {
+  const activeItem = activeView === 'reference' ? 'reference' : subView === 'weakness' ? 'weakness' : 'practice';
+
+  return (
+    <nav className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-3 border-t border-white/10 bg-[#171a27]/95 p-2 backdrop-blur lg:hidden" aria-label="移动端主导航">
+      <button
+        type="button"
+        onClick={onPracticeClick}
+        className={`h-11 rounded-md text-sm font-semibold transition ${
+          activeItem === 'practice' ? 'bg-white text-slate-950' : 'text-slate-200 hover:bg-white/10'
+        }`}
+      >
+        练习
+      </button>
+      <button
+        type="button"
+        onClick={onReferenceClick}
+        className={`h-11 rounded-md text-sm font-semibold transition ${
+          activeItem === 'reference' ? 'bg-white text-slate-950' : 'text-slate-200 hover:bg-white/10'
+        }`}
+      >
+        速查
+      </button>
+      <button
+        type="button"
+        onClick={onWeaknessClick}
+        disabled={!weaknessAvailable}
+        className={`h-11 rounded-md text-sm font-semibold transition ${
+          activeItem === 'weakness'
+            ? 'bg-guitar-accent text-white'
+            : weaknessAvailable
+              ? 'text-slate-200 hover:bg-white/10'
+              : 'cursor-not-allowed text-slate-600'
+        }`}
+      >
+        弱点
+      </button>
+    </nav>
+  );
+}
+
+interface MobilePracticeSettingsSheetProps {
+  isOpen: boolean;
+  activeModeId: PracticeModeId;
+  activeKey: PracticeKey;
+  subView: PracticeSubView;
+  solfeggioDisplayMode: SolfeggioDisplayMode;
+  guitarTone: GuitarToneId;
+  buildLabel: string;
+  onClose: () => void;
+  onPathSelect: (modeId: PracticeModeId) => void;
+  onStartPractice: () => void;
+  onShowWeakness: () => void;
+  onKeyChange: (key: PracticeKey) => void;
+  onSolfeggioDisplayModeChange: (mode: SolfeggioDisplayMode) => void;
+  onGuitarToneChange: (toneId: GuitarToneId) => void;
+}
+
+function MobilePracticeSettingsSheet({
+  isOpen,
+  activeModeId,
+  activeKey,
+  subView,
+  solfeggioDisplayMode,
+  guitarTone,
+  buildLabel,
+  onClose,
+  onPathSelect,
+  onStartPractice,
+  onShowWeakness,
+  onKeyChange,
+  onSolfeggioDisplayModeChange,
+  onGuitarToneChange,
+}: MobilePracticeSettingsSheetProps) {
+  const activePath = getPracticePathOption(activeModeId);
+  const activeGroup = getPracticeGroupOption(activeModeId);
+  const directionOptions = getPracticeDirectionOptions(activeModeId);
+  const directionGroups = PRACTICE_DIRECTION_GROUPS[activeGroup.id] ?? null;
+  const [isGraphOpen, setIsGraphOpen] = useState(false);
+
+  if (!isOpen) {
+    return null;
+  }
+
+  function selectPath(modeId: PracticeModeId): void {
+    onPathSelect(modeId);
+    onClose();
+  }
+
+  function handleGraphPathSelect(modeId: PracticeModeId): void {
+    onPathSelect(modeId);
+    setIsGraphOpen(false);
+    onClose();
+  }
+
+  return (
+    <>
+      <div className="fixed inset-0 z-50 bg-black/60 lg:hidden" onClick={onClose} aria-hidden="true" />
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-label="练习设置"
+        className="fixed inset-x-0 bottom-0 z-50 max-h-[88vh] overflow-y-auto rounded-t-xl border border-white/10 bg-[#202331] p-4 shadow-2xl lg:hidden"
+      >
+        <div className="mx-auto mb-4 h-1 w-12 rounded-full bg-white/25" />
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Practice Settings</p>
+            <h2 className="mt-1 text-xl font-bold">练习设置</h2>
+            <p className="mt-1 text-sm text-slate-400">{activePath.label}</p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="h-9 rounded-md border border-white/15 bg-white/8 px-3 text-sm font-semibold text-slate-100"
+          >
+            关闭
+          </button>
+        </div>
+
+        <div className="mt-5 space-y-5">
+          <div>
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <p className="text-sm font-semibold text-slate-200">练习模式</p>
+              <button
+                type="button"
+                onClick={() => setIsGraphOpen(true)}
+                className="h-8 rounded-md border border-white/15 bg-white/8 px-3 text-xs font-semibold text-slate-200"
+              >
+                图选通路
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              {PRACTICE_GROUP_OPTIONS.map((group) => (
+                <button
+                  key={group.id}
+                  type="button"
+                  onClick={() => selectPath(group.defaultModeId)}
+                  className={`h-10 rounded-md border px-3 text-sm font-semibold transition ${
+                    activeGroup.id === group.id
+                      ? 'border-guitar-accent bg-guitar-accent text-white'
+                      : 'border-white/15 bg-white/8 text-slate-200'
+                  }`}
+                  aria-pressed={activeGroup.id === group.id}
+                >
+                  {group.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {directionOptions.length > 1 && directionGroups === null && (
+            <div>
+              <p className="mb-2 text-sm font-semibold text-slate-200">方向</p>
+              <div className="grid grid-cols-2 gap-2">
+                {directionOptions.map((path) => (
+                  <button
+                    key={path.id}
+                    type="button"
+                    onClick={() => selectPath(path.id)}
+                    className={`h-10 rounded-md border px-3 text-sm font-semibold transition ${
+                      activeModeId === path.id
+                        ? 'border-white bg-white text-slate-950'
+                        : 'border-white/15 bg-white/8 text-slate-200'
+                    }`}
+                    aria-pressed={activeModeId === path.id}
+                  >
+                    {getDirectionButtonLabel(path)}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {directionGroups !== null && (
+            <div className="space-y-3">
+              {directionGroups.map((group) => (
+                <div key={group.id} className="grid grid-cols-[3.5rem_minmax(0,1fr)] items-center gap-2">
+                  <p className="text-sm text-slate-500">{group.label}</p>
+                  <div className="grid grid-cols-3 gap-2">
+                    {group.modeIds.map((modeId) => {
+                      const path = getPracticePathOption(modeId);
+                      return (
+                        <button
+                          key={modeId}
+                          type="button"
+                          onClick={() => selectPath(modeId)}
+                          className={`h-10 rounded-md border px-2 text-sm font-semibold transition ${
+                            activeModeId === modeId
+                              ? 'border-white bg-white text-slate-950'
+                              : 'border-white/15 bg-white/8 text-slate-200'
+                          }`}
+                          aria-pressed={activeModeId === modeId}
+                        >
+                          {getDirectionButtonLabel(path)}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div>
+            <p className="mb-2 text-sm font-semibold text-slate-200">当前页面</p>
+            <div className="grid grid-cols-2 overflow-hidden rounded-md border border-white/15 bg-black/20">
+              <button
+                type="button"
+                onClick={() => {
+                  onStartPractice();
+                  onClose();
+                }}
+                className={`h-10 text-sm font-semibold ${subView === 'train' ? 'bg-white text-slate-950' : 'text-slate-100'}`}
+              >
+                练习
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onShowWeakness();
+                  onClose();
+                }}
+                disabled={!activePath.weaknessAvailable}
+                className={`h-10 border-l border-white/15 text-sm font-semibold ${
+                  subView === 'weakness' && activePath.weaknessAvailable
+                    ? 'bg-guitar-accent text-white'
+                    : activePath.weaknessAvailable
+                      ? 'text-slate-100'
+                      : 'text-slate-600'
+                }`}
+              >
+                查看弱点
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <p className="mb-2 text-sm font-semibold text-slate-200">调性</p>
+            <div className="grid grid-cols-2 gap-2">
+              {KEY_OPTIONS.map((key) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => {
+                    onKeyChange(key);
+                    onClose();
+                  }}
+                  className={`h-10 rounded-md border text-sm font-semibold transition ${
+                    activeKey === key
+                      ? 'border-guitar-accent bg-guitar-accent text-white'
+                      : 'border-white/15 bg-white/8 text-slate-200'
+                  }`}
+                >
+                  {key === 'G major' ? 'G 大调' : 'C 大调'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <p className="mb-2 text-sm font-semibold text-slate-200">唱名显示</p>
+              <SolfeggioDisplayModeSelector
+                activeMode={solfeggioDisplayMode}
+                onModeChange={onSolfeggioDisplayModeChange}
+              />
+            </div>
+            <div>
+              <p className="mb-2 text-sm font-semibold text-slate-200">音色</p>
+              <GuitarToneSelector activeTone={guitarTone} onToneChange={onGuitarToneChange} />
+            </div>
+          </div>
+
+          <div className="rounded-md bg-black/20 p-3 text-xs leading-6 text-slate-500">
+            <p>正式版本：v{APP_VERSION}</p>
+            <p>构建/提交标识：{buildLabel}</p>
+          </div>
+        </div>
+      </section>
+
+      {isGraphOpen && (
+        <PracticePathGraphDialog
+          activeModeId={activeModeId}
+          solfeggioDisplayMode={solfeggioDisplayMode}
+          onClose={() => setIsGraphOpen(false)}
+          onPathSelect={handleGraphPathSelect}
+        />
+      )}
+    </>
   );
 }
 
@@ -1971,7 +2408,7 @@ function PracticeAnswerPanel({ answerKind, children }: PracticeAnswerPanelProps)
           </h3>
         </div>
         <p className="text-sm text-slate-500">
-          一键作答，答完后右侧查看反馈。
+          一键作答，答完后查看反馈。
         </p>
       </div>
       {children}

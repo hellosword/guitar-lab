@@ -15,7 +15,7 @@ const SHARP_NOTES: SharpNoteName[] = ['C#', 'D#', 'F#', 'G#', 'A#'];
 export default function NoteSelector({ disabled = false, onSubmit }: NoteSelectorProps) {
   return (
     <div className="space-y-3">
-      <div className="grid grid-cols-7 gap-2">
+      <div className="grid grid-cols-4 gap-2 sm:grid-cols-7">
         {NATURAL_NOTES.map((noteName) => (
           <button
             key={noteName}
@@ -29,7 +29,7 @@ export default function NoteSelector({ disabled = false, onSubmit }: NoteSelecto
         ))}
       </div>
 
-      <div className="grid grid-cols-5 gap-2">
+      <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
         {SHARP_NOTES.map((noteName) => (
           <button
             key={noteName}

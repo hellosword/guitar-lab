@@ -15,7 +15,7 @@ const SOLFEGGIOS: Solfeggio[] = ['Do', 'Re', 'Mi', 'Fa', 'Sol', 'La', 'Si'];
 
 export default function SolfeggioSelector({ disabled = false, displayMode, onSubmit }: SolfeggioSelectorProps) {
   return (
-    <div className="grid grid-cols-7 gap-2">
+    <div className="grid grid-cols-4 gap-2 sm:grid-cols-7">
       {SOLFEGGIOS.map((solfeggio) => (
         <button
           key={solfeggio}

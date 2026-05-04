@@ -154,3 +154,4 @@
 | 2026-05-04 | 文档期 | 移动端 Adaptive Shell 交互规格：明确共享训练核心、PC Web 壳层和移动端 Focus Mode 的边界与实施阶段 | `docs/product/mobile-adaptive-shell-spec.md` |
 | 2026-05-04 | v0.0.36 | 移动端第一轮交互打磨：指板图在窄屏中保持更大的可点击宽度并在卡片内横向滚动，图选通路图改为窄屏内部横向滚动，补充页面横向溢出回归测试 | `src/components/Fretboard/index.tsx`、`src/App.tsx`、`tests/e2e/mvp-practice.spec.ts` |
 | 2026-05-04 | 待发布 | 移动端开发架构准备：抽离 `domain` 核心层、`app` 应用服务层与 `desktop` 桌面交互壳，保留现有行为不变 | `src/domain/`、`src/app/`、`src/desktop/DesktopApp.tsx`、`src/App.tsx` |
+| 2026-05-04 | 待发布 | 移动端 Focus Mode 第一版：手机端改用顶部上下文栏、设置 Sheet、底部练习/速查/弱点导航与移动端题后反馈区，桌面端保持原布局 | `src/desktop/DesktopApp.tsx`、`src/components/NoteSelector/index.tsx`、`src/components/SolfeggioSelector/index.tsx`、`tests/e2e/mvp-practice.spec.ts` |
