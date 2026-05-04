@@ -52,7 +52,7 @@ test('MVP 练习页可见并能完成一道音名题', async ({ page }) => {
   await expect(page.getByRole('heading', { name: '位置、音名、唱名反应训练' })).toBeVisible();
   const hasHorizontalPageOverflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1);
   expect(hasHorizontalPageOverflow).toBe(false);
-  await expect(page.getByText('v0.0.35')).toBeVisible();
+  await expect(page.getByText('v0.0.36')).toBeVisible();
   await expect(page.getByRole('button', { name: 'G 大调' })).toBeVisible();
   await expect(page.getByRole('button', { name: '速查' })).toBeVisible();
   await expect(page.getByRole('button', { name: '综合' })).toBeVisible();
@@ -190,7 +190,7 @@ test('练习记忆会按版本写入本地并跨刷新保留', async ({ page }) 
   };
 
   expect(parsedBeforeReload.schemaVersion).toBe(1);
-  expect(parsedBeforeReload.appVersion).toBe('0.0.35');
+  expect(parsedBeforeReload.appVersion).toBe('0.0.36');
   expect(parsedBeforeReload.recentEvents?.length).toBeGreaterThan(0);
   expect(Object.keys(parsedBeforeReload.masteryMap ?? {}).length).toBeGreaterThan(0);
   expect(parsedBeforeReload.recentEvents).toEqual(
@@ -402,7 +402,7 @@ test('音名唱名总结页不会显示内部播放位置', async ({ page }) => 
   const noteSolfeggioItemKey = 'note-to-solfeggio|G major|B|Mi|';
   const memory = {
     schemaVersion: 1,
-    appVersion: '0.0.35',
+    appVersion: '0.0.36',
     createdAt: '2026-05-04T00:00:00.000Z',
     updatedAt: '2026-05-04T00:00:00.000Z',
     profile: { id: 'test-profile' },
