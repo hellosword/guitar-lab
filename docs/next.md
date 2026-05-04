@@ -124,7 +124,7 @@
 | 2026-05-03 | v0.0.27 | 剩余位置输入类练习补齐弱点地图：指板音名、指板唱名、六线谱音名、六线谱唱名接入位置级历史记录与自适应复盘 | `src/App.tsx`、`tests/e2e/mvp-practice.spec.ts` |
 | 2026-05-03 | v0.0.28 | 位置输入类出题调度校准：移除 G 大调 F# 固定插队，增加位置与音名双层本轮覆盖权重，降低高弱点连发 | `src/modules/fretboard-game/practiceSession.ts`、`src/modules/fretboard-game/adaptivePracticeConfig.ts`、`tests/e2e/mvp-practice.spec.ts` |
 | 2026-05-04 | v0.0.33 | 吉他采样音色切换：加入真实吉他采样资源、音色选择界面与采样播放实现，并同步版本号 | `src/lib/audio.ts`、`src/App.tsx`、`src/appVersion.ts`、`package.json`、`package-lock.json`、`public/audio/samples/guitar/` |
-| 2026-05-04 | 待发布 | 开发期构建标识显示：页面同时展示正式版本号与 Git 分支/短提交号，便于确认刷新后的实际代码来源 | `vite.config.ts`、`src/vite-env.d.ts`、`src/App.tsx` |
-| 2026-05-04 | 待发布 | 音名唱名题播放音高修正：按当前调性选定一组连续首调八度，避免同一练习中音名被播放到不同八度 | `src/modules/fretboard-game/practiceSession.ts` |
-| 2026-05-04 | 待发布 | 答对自动下一题节奏修正：同时满足最小等待 500ms 和当前音高播放结束后才进入下一题，减少音频重叠 | `src/lib/audio.ts`、`src/App.tsx`、`src/modules/fretboard-game/practiceInteractionConfig.ts`、`tests/e2e/mvp-practice.spec.ts` |
-| 2026-05-04 | 待发布 | 音名唱名总结页去位置化：总结重点和慢错项按当前通路展示 `音名 -> 唱名`，不再泄漏内部播放位置 | `src/App.tsx`、`src/modules/fretboard-game/practiceMemory.ts`、`tests/e2e/mvp-practice.spec.ts` |
+| 2026-05-04 | v0.0.34 | 开发期构建标识显示：页面同时展示正式版本号与 Git 分支/短提交号，便于确认刷新后的实际代码来源 | `vite.config.ts`、`src/vite-env.d.ts`、`src/App.tsx` |
+| 2026-05-04 | v0.0.34 | 音名唱名题播放音高修正：按当前调性选定一组连续首调八度，避免同一练习中音名被播放到不同八度 | `src/modules/fretboard-game/practiceSession.ts` |
+| 2026-05-04 | v0.0.34 | 答对自动下一题节奏修正：同时满足最小等待 500ms 和当前音高播放结束后才进入下一题，减少音频重叠 | `src/lib/audio.ts`、`src/App.tsx`、`src/modules/fretboard-game/practiceInteractionConfig.ts`、`tests/e2e/mvp-practice.spec.ts` |
+| 2026-05-04 | v0.0.34 | 音名唱名总结页去位置化：总结重点和慢错项按当前通路展示 `音名 -> 唱名`，不再泄漏内部播放位置 | `src/App.tsx`、`src/modules/fretboard-game/practiceMemory.ts`、`tests/e2e/mvp-practice.spec.ts` |
