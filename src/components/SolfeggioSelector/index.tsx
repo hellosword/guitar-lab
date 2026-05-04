@@ -3,7 +3,7 @@
  * 首调唱名法：Do Re Mi Fa Sol La Si
  */
 import type { Solfeggio } from '../../types/theory';
-import { formatSolfeggio, type SolfeggioDisplayMode } from '../../lib/solfeggioDisplay';
+import { formatSolfeggio, type SolfeggioDisplayMode } from '../../app/solfeggioDisplay';
 
 interface SolfeggioSelectorProps {
   disabled?: boolean;

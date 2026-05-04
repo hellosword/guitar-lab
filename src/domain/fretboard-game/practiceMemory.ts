@@ -1,5 +1,5 @@
-import { APP_VERSION } from '../../appVersion';
-import { getNoteAtPosition, getPositionId, getSolfeggioInKey } from '../../lib/theory';
+import { APP_VERSION } from '../../app/appVersion';
+import { getNoteAtPosition, getPositionId, getSolfeggioInKey } from '../theory';
 import type { FretPosition, PracticeKey, SharpNoteName, Solfeggio } from '../../types/theory';
 import { ADAPTIVE_PRACTICE_CONFIG } from './adaptivePracticeConfig';
 import type { MvpQuestion, MvpQuestionType } from './types';

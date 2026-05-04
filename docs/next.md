@@ -153,3 +153,4 @@
 | 2026-05-04 | v0.0.35 | 图选通路图布局优化：改为分层节点、平行双向边和底部外围弧线，减少交叉、遮挡和按钮压线 | `src/App.tsx`、`docs/product/practice-path-interaction-framework-spec.md` |
 | 2026-05-04 | 文档期 | 移动端 Adaptive Shell 交互规格：明确共享训练核心、PC Web 壳层和移动端 Focus Mode 的边界与实施阶段 | `docs/product/mobile-adaptive-shell-spec.md` |
 | 2026-05-04 | v0.0.36 | 移动端第一轮交互打磨：指板图在窄屏中保持更大的可点击宽度并在卡片内横向滚动，图选通路图改为窄屏内部横向滚动，补充页面横向溢出回归测试 | `src/components/Fretboard/index.tsx`、`src/App.tsx`、`tests/e2e/mvp-practice.spec.ts` |
+| 2026-05-04 | 待发布 | 移动端开发架构准备：抽离 `domain` 核心层、`app` 应用服务层与 `desktop` 桌面交互壳，保留现有行为不变 | `src/domain/`、`src/app/`、`src/desktop/DesktopApp.tsx`、`src/App.tsx` |

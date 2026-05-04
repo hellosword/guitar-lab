@@ -2,7 +2,7 @@
  * Web Audio 封装层
  * 负责播放单个指板位置的吉他采样音高。
  */
-import { getMidiAtPosition } from './theory';
+import { getMidiAtPosition } from '../domain/theory';
 import type { FretPosition } from '../types/theory';
 
 type BrowserAudioContext = typeof AudioContext;

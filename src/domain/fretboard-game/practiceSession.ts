@@ -8,7 +8,7 @@ import {
   getSolfeggioInKey,
   isGKeyFocusNote,
   isSamePosition,
-} from '../../lib/theory';
+} from '../theory';
 import type { FretPosition, PracticeKey, SharpNoteName, Solfeggio } from '../../types/theory';
 import {
   createPracticeItemKey,

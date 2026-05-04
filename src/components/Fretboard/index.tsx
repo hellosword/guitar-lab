@@ -3,7 +3,7 @@
  * 用于展示吉他指板、高亮品格、接收点击输入
  */
 import type { MouseEvent } from 'react';
-import { formatPosition, getPositionId, isSamePosition } from '../../lib/theory';
+import { formatPosition, getPositionId, isSamePosition } from '../../domain/theory';
 import type { FretPosition, GuitarString } from '../../types/theory';
 
 export interface FretboardPositionLabel {
