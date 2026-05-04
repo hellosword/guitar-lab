@@ -87,11 +87,18 @@ interface PracticePathOption {
 }
 
 interface PracticeGroupOption {
-  id: 'mixed' | 'position-note' | 'position-solfeggio' | 'note-solfeggio' | 'tab-reading';
+  id: 'mixed' | 'fretboard-memory' | 'note-solfeggio' | 'tab-reading';
   label: string;
   description: string;
   defaultModeId: PracticeModeId;
   modeIds: PracticeModeId[];
+}
+
+interface PracticeDirectionGroup {
+  id: string;
+  label: string;
+  modeIds: PracticeModeId[];
+  includesKeySelect?: boolean;
 }
 
 const PRACTICE_PATH_OPTIONS: PracticePathOption[] = [
@@ -218,18 +225,18 @@ const PRACTICE_GROUP_OPTIONS: PracticeGroupOption[] = [
     modeIds: ['mixed'],
   },
   {
-    id: 'position-note',
-    label: '位置音名',
-    description: '训练指板位置和音名之间的双向反应。',
+    id: 'fretboard-memory',
+    label: '指板记忆',
+    description: '训练指板位置与音名、当前调唱名之间的双向反应。',
     defaultModeId: 'position-note-mixed',
-    modeIds: ['board-to-note', 'note-to-positions', 'position-note-mixed'],
-  },
-  {
-    id: 'position-solfeggio',
-    label: '位置唱名',
-    description: '训练指板位置和当前调唱名之间的双向反应。',
-    defaultModeId: 'position-solfeggio-mixed',
-    modeIds: ['board-to-solfeggio', 'solfeggio-to-positions', 'position-solfeggio-mixed'],
+    modeIds: [
+      'board-to-note',
+      'note-to-positions',
+      'position-note-mixed',
+      'board-to-solfeggio',
+      'solfeggio-to-positions',
+      'position-solfeggio-mixed',
+    ],
   },
   {
     id: 'note-solfeggio',
@@ -246,6 +253,22 @@ const PRACTICE_GROUP_OPTIONS: PracticeGroupOption[] = [
     modeIds: ['tab-to-note', 'tab-to-solfeggio', 'tab-reading-mixed'],
   },
 ];
+
+const PRACTICE_DIRECTION_GROUPS: Partial<Record<PracticeGroupOption['id'], PracticeDirectionGroup[]>> = {
+  'fretboard-memory': [
+    {
+      id: 'note-name',
+      label: '音名',
+      modeIds: ['board-to-note', 'note-to-positions', 'position-note-mixed'],
+    },
+    {
+      id: 'solfeggio',
+      label: '唱名',
+      modeIds: ['board-to-solfeggio', 'solfeggio-to-positions', 'position-solfeggio-mixed'],
+      includesKeySelect: true,
+    },
+  ],
+};
 
 interface PositionPracticeStats {
   attempts: number;
@@ -323,6 +346,10 @@ function getPracticeDirectionOptions(modeId: PracticeModeId): PracticePathOption
   return group.modeIds
     .map((directionModeId) => getPracticePathOption(directionModeId))
     .filter((path) => path.id !== 'mixed');
+}
+
+function getDirectionButtonLabel(path: PracticePathOption): string {
+  return path.id.endsWith('-mixed') ? '混合' : path.label;
 }
 
 function formatPositions(positions: FretPosition[]): string {
@@ -1329,8 +1356,10 @@ function App() {
             <PracticePathSelector
               activeModeId={config.modeId}
               subView={practiceSubView}
+              practiceKey={config.key}
               solfeggioDisplayMode={solfeggioDisplayMode}
               onPathSelect={handlePracticePathSelect}
+              onKeyChange={handleKeyChange}
               onStartPractice={handleStartPractice}
               onShowWeakness={handleShowPracticeWeakness}
             />
@@ -1598,8 +1627,10 @@ interface FeedbackPanelProps {
 interface PracticePathSelectorProps {
   activeModeId: PracticeModeId;
   subView: PracticeSubView;
+  practiceKey: PracticeKey;
   solfeggioDisplayMode: SolfeggioDisplayMode;
   onPathSelect: (modeId: PracticeModeId) => void;
+  onKeyChange: (key: PracticeKey) => void;
   onStartPractice: () => void;
   onShowWeakness: () => void;
 }
@@ -1607,14 +1638,17 @@ interface PracticePathSelectorProps {
 function PracticePathSelector({
   activeModeId,
   subView,
+  practiceKey,
   solfeggioDisplayMode,
   onPathSelect,
+  onKeyChange,
   onStartPractice,
   onShowWeakness,
 }: PracticePathSelectorProps) {
   const activePath = getPracticePathOption(activeModeId);
   const activeGroup = getPracticeGroupOption(activeModeId);
   const directionOptions = getPracticeDirectionOptions(activeModeId);
+  const directionGroups = PRACTICE_DIRECTION_GROUPS[activeGroup.id] ?? null;
   const [isGraphOpen, setIsGraphOpen] = useState(false);
 
   function handleGraphPathSelect(modeId: PracticeModeId): void {
@@ -1689,7 +1723,7 @@ function PracticePathSelector({
           ))}
         </div>
 
-        {directionOptions.length > 1 && (
+        {directionOptions.length > 1 && directionGroups === null && (
           <div className="flex flex-wrap items-center gap-2 border-t border-white/10 pt-2">
             <span className="text-xs text-slate-500">方向</span>
             {directionOptions.map((path) => (
@@ -1705,8 +1739,55 @@ function PracticePathSelector({
                 }`}
                 aria-pressed={activeModeId === path.id}
               >
-                {path.label}
+                {getDirectionButtonLabel(path)}
               </button>
+            ))}
+          </div>
+        )}
+
+        {directionGroups !== null && (
+          <div className="flex flex-wrap items-center gap-3 border-t border-white/10 pt-2">
+            {directionGroups.map((directionGroup, index) => (
+              <div key={directionGroup.id} className="flex flex-wrap items-center gap-2">
+                {index > 0 && <span className="mx-1 h-6 w-px bg-white/15" aria-hidden="true" />}
+                <span className="text-xs text-slate-500">{directionGroup.label}</span>
+                {directionGroup.includesKeySelect && (
+                  <label className="flex items-center gap-2 text-xs text-slate-500">
+                    当前调
+                    <select
+                      value={practiceKey}
+                      onChange={(event) => onKeyChange(event.currentTarget.value as PracticeKey)}
+                      className="h-7 rounded-md border border-white/15 bg-[#171a27] px-2 text-xs font-semibold text-slate-100 outline-none transition hover:bg-white/10 focus:border-guitar-accent"
+                      aria-label="选择当前调"
+                    >
+                      {KEY_OPTIONS.map((key) => (
+                        <option key={key} value={key}>
+                          {key === 'G major' ? 'G 大调' : 'C 大调'}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+                {directionGroup.modeIds.map((modeId) => {
+                  const path = getPracticePathOption(modeId);
+                  return (
+                    <button
+                      key={path.id}
+                      type="button"
+                      onClick={() => onPathSelect(path.id)}
+                      title={path.description}
+                      className={`h-7 rounded-md border px-2 text-xs font-semibold transition ${
+                        activeModeId === path.id
+                          ? 'border-white bg-white text-slate-950'
+                          : 'border-white/15 bg-white/8 text-slate-200 hover:bg-white/15'
+                      }`}
+                      aria-pressed={activeModeId === path.id}
+                    >
+                      {getDirectionButtonLabel(path)}
+                    </button>
+                  );
+                })}
+              </div>
             ))}
           </div>
         )}
@@ -2130,8 +2211,8 @@ function FretboardMemoryView({
         <div className="rounded-lg border border-white/10 bg-white/10 p-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Fretboard Memory</p>
-              <h2 className="mt-2 text-xl font-semibold">随时打开的指板记忆</h2>
+              <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Fretboard Reference</p>
+              <h2 className="mt-2 text-xl font-semibold">随时打开的指板速查</h2>
               <p className="mt-2 text-sm leading-6 text-slate-400">
                 点击任意位置听音高。切换音名或首调唱名标记，观察同一个位置在当前大调里的功能。
               </p>
