@@ -131,4 +131,5 @@
 | 2026-05-04 | 待发布 | 练习模式层级改造：以“综合、位置音名、位置唱名、音名唱名、六线谱”作为一级训练组，组内提供两个方向与混合，并补齐 `唱名 -> 音名`、`唱名 -> 位置` 题型及历史记录 | `src/App.tsx`、`src/modules/fretboard-game/practiceSession.ts`、`src/modules/fretboard-game/practiceMemory.ts`、`src/modules/fretboard-game/types.ts`、`docs/product/practice-path-interaction-framework-spec.md`、`tests/e2e/mvp-practice.spec.ts` |
 | 2026-05-04 | 待发布 | 组内混合抽题修复：过滤 0 权重题型，避免音名唱名混合等组内混合误抽到组外题型，并增加回归测试 | `src/modules/fretboard-game/practiceSession.ts`、`tests/e2e/mvp-practice.spec.ts` |
 | 2026-05-04 | 待发布 | 六线谱练习取消二级混合入口：只保留 `六线谱 -> 音名` 与 `六线谱 -> 唱名`，避免读谱训练过早混合导致任务目标不清晰 | `src/App.tsx`、`docs/product/practice-path-interaction-framework-spec.md`、`tests/e2e/mvp-practice.spec.ts` |
-| 2026-05-04 | 待发布 | 指板记忆训练组整合：将一级“位置音名/位置唱名”合并为“指板记忆”，二级横向分为音名组与带当前调选择的唱名组，并将速查页命名为“指板速查” | `src/App.tsx`、`docs/product/practice-path-interaction-framework-spec.md`、`tests/e2e/mvp-practice.spec.ts` |
+| 2026-05-04 | 待发布 | 指板记忆训练组整合：将一级“位置音名/位置唱名”合并为“指板记忆”，二级横向分为音名组与唱名组，并将速查页命名为“指板速查” | `src/App.tsx`、`docs/product/practice-path-interaction-framework-spec.md`、`tests/e2e/mvp-practice.spec.ts` |
+| 2026-05-04 | 待发布 | 指板记忆二级分类简化：移除唱名组内局部当前调选择，统一复用页面顶部全局调性控件 | `src/App.tsx`、`docs/product/practice-path-interaction-framework-spec.md`、`tests/e2e/mvp-practice.spec.ts` |

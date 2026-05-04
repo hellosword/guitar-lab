@@ -98,7 +98,6 @@ interface PracticeDirectionGroup {
   id: string;
   label: string;
   modeIds: PracticeModeId[];
-  includesKeySelect?: boolean;
 }
 
 const PRACTICE_PATH_OPTIONS: PracticePathOption[] = [
@@ -265,7 +264,6 @@ const PRACTICE_DIRECTION_GROUPS: Partial<Record<PracticeGroupOption['id'], Pract
       id: 'solfeggio',
       label: '唱名',
       modeIds: ['board-to-solfeggio', 'solfeggio-to-positions', 'position-solfeggio-mixed'],
-      includesKeySelect: true,
     },
   ],
 };
@@ -1356,10 +1354,8 @@ function App() {
             <PracticePathSelector
               activeModeId={config.modeId}
               subView={practiceSubView}
-              practiceKey={config.key}
               solfeggioDisplayMode={solfeggioDisplayMode}
               onPathSelect={handlePracticePathSelect}
-              onKeyChange={handleKeyChange}
               onStartPractice={handleStartPractice}
               onShowWeakness={handleShowPracticeWeakness}
             />
@@ -1627,10 +1623,8 @@ interface FeedbackPanelProps {
 interface PracticePathSelectorProps {
   activeModeId: PracticeModeId;
   subView: PracticeSubView;
-  practiceKey: PracticeKey;
   solfeggioDisplayMode: SolfeggioDisplayMode;
   onPathSelect: (modeId: PracticeModeId) => void;
-  onKeyChange: (key: PracticeKey) => void;
   onStartPractice: () => void;
   onShowWeakness: () => void;
 }
@@ -1638,10 +1632,8 @@ interface PracticePathSelectorProps {
 function PracticePathSelector({
   activeModeId,
   subView,
-  practiceKey,
   solfeggioDisplayMode,
   onPathSelect,
-  onKeyChange,
   onStartPractice,
   onShowWeakness,
 }: PracticePathSelectorProps) {
@@ -1751,23 +1743,6 @@ function PracticePathSelector({
               <div key={directionGroup.id} className="flex flex-wrap items-center gap-2">
                 {index > 0 && <span className="mx-1 h-6 w-px bg-white/15" aria-hidden="true" />}
                 <span className="text-xs text-slate-500">{directionGroup.label}</span>
-                {directionGroup.includesKeySelect && (
-                  <label className="flex items-center gap-2 text-xs text-slate-500">
-                    当前调
-                    <select
-                      value={practiceKey}
-                      onChange={(event) => onKeyChange(event.currentTarget.value as PracticeKey)}
-                      className="h-7 rounded-md border border-white/15 bg-[#171a27] px-2 text-xs font-semibold text-slate-100 outline-none transition hover:bg-white/10 focus:border-guitar-accent"
-                      aria-label="选择当前调"
-                    >
-                      {KEY_OPTIONS.map((key) => (
-                        <option key={key} value={key}>
-                          {key === 'G major' ? 'G 大调' : 'C 大调'}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                )}
                 {directionGroup.modeIds.map((modeId) => {
                   const path = getPracticePathOption(modeId);
                   return (

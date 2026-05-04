@@ -62,7 +62,7 @@ test('MVP 练习页可见并能完成一道音名题', async ({ page }) => {
   await page.getByRole('button', { name: '指板记忆' }).click();
   await expect(page.getByText('音名', { exact: true }).first()).toBeVisible();
   await expect(page.getByText('唱名', { exact: true }).first()).toBeVisible();
-  await expect(page.getByLabel('选择当前调')).toHaveValue('G major');
+  await expect(page.getByLabel('选择当前调')).toHaveCount(0);
   await expect(page.getByRole('button', { name: '位置 -> 唱名' })).toBeVisible();
   await expect(page.getByRole('button', { name: '唱名 -> 位置' })).toBeVisible();
   await expect(page.getByRole('button', { name: '音名 -> 位置' })).toHaveAttribute('title', '看到音名后，在空指板上找出当前范围内的所有位置。');
@@ -1008,7 +1008,7 @@ test('练习模式切换会立即重开对应题型并保留到调性切换', as
   await selectDirection(page, '指板记忆', '音名 -> 位置');
   await expect(page.getByText('在空指板上找出所有这个音名的位置')).toBeVisible();
 
-  await page.getByLabel('选择当前调').selectOption('C major');
+  await page.getByRole('button', { name: 'C 大调' }).click();
   await expect(page.getByText('第 1 / 20 题')).toBeVisible();
   await expect(page.getByText('C 大调 · 0-3 品 · 音名 -> 位置')).toBeVisible();
   await expect(page.getByText('在空指板上找出所有这个音名的位置')).toBeVisible();
