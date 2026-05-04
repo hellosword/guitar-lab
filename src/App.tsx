@@ -148,7 +148,7 @@ const PRACTICE_PATH_OPTIONS: PracticePathOption[] = [
     label: '位置 -> 音名',
     description: '看到指板上的弦品位置后，快速反应它的音名。',
     weaknessAvailable: true,
-    edgePosition: { left: '34%', top: '66%' },
+    edgePosition: { left: '34%', top: '65%' },
   },
   {
     id: 'board-to-solfeggio',
@@ -157,7 +157,7 @@ const PRACTICE_PATH_OPTIONS: PracticePathOption[] = [
     label: '位置 -> 唱名',
     description: '看到指板位置后，直接反应当前调里的首调唱名。',
     weaknessAvailable: true,
-    edgePosition: { left: '50%', top: '84%' },
+    edgePosition: { left: '50%', top: '82%' },
   },
   {
     id: 'tab-to-note',
@@ -166,7 +166,7 @@ const PRACTICE_PATH_OPTIONS: PracticePathOption[] = [
     label: '六线谱 -> 音名',
     description: '看到六线谱位置后，快速反应它在指板上的音名。',
     weaknessAvailable: true,
-    edgePosition: { left: '48%', top: '38%' },
+    edgePosition: { left: '50%', top: '39%' },
   },
   {
     id: 'tab-to-solfeggio',
@@ -175,7 +175,7 @@ const PRACTICE_PATH_OPTIONS: PracticePathOption[] = [
     label: '六线谱 -> 唱名',
     description: '看到六线谱位置后，反应当前调里的首调唱名。',
     weaknessAvailable: true,
-    edgePosition: { left: '66%', top: '38%' },
+    edgePosition: { left: '68%', top: '34%' },
   },
   {
     id: 'note-to-solfeggio',
@@ -184,7 +184,7 @@ const PRACTICE_PATH_OPTIONS: PracticePathOption[] = [
     label: '音名 -> 唱名',
     description: '看到音名后，快速反应它在当前调里的首调唱名。',
     weaknessAvailable: true,
-    edgePosition: { left: '66%', top: '66%' },
+    edgePosition: { left: '66%', top: '65%' },
   },
   {
     id: 'solfeggio-to-note',
@@ -193,7 +193,7 @@ const PRACTICE_PATH_OPTIONS: PracticePathOption[] = [
     label: '唱名 -> 音名',
     description: '看到当前调里的首调唱名后，快速反应对应音名。',
     weaknessAvailable: true,
-    edgePosition: { left: '64%', top: '58%' },
+    edgePosition: { left: '66%', top: '57%' },
   },
   {
     id: 'note-to-positions',
@@ -202,7 +202,7 @@ const PRACTICE_PATH_OPTIONS: PracticePathOption[] = [
     label: '音名 -> 位置',
     description: '看到音名后，在空指板上找出当前范围内的所有位置。',
     weaknessAvailable: true,
-    edgePosition: { left: '34%', top: '52%' },
+    edgePosition: { left: '34%', top: '57%' },
   },
   {
     id: 'solfeggio-to-positions',
@@ -211,7 +211,7 @@ const PRACTICE_PATH_OPTIONS: PracticePathOption[] = [
     label: '唱名 -> 位置',
     description: '看到当前调里的首调唱名后，在空指板上找出所有对应位置。',
     weaknessAvailable: true,
-    edgePosition: { left: '52%', top: '52%' },
+    edgePosition: { left: '50%', top: '91%' },
   },
 ];
 
@@ -1850,22 +1850,22 @@ function PracticePathGraph({ activeModeId, solfeggioDisplayMode, onPathSelect }:
             <path d="M 0 0 L 8 4 L 0 8 z" fill="#ff4f7b" />
           </marker>
         </defs>
-        <PracticePathLine active={activeModeId === 'tab-to-note'} d="M 450 122 L 450 320" />
-        <PracticePathLine active={activeModeId === 'tab-to-solfeggio'} d="M 475 122 C 615 170 700 225 735 320" />
-        <PracticePathLine active={activeModeId === 'board-to-note'} d="M 230 360 L 410 360" />
-        <PracticePathLine active={activeModeId === 'note-to-positions'} d="M 410 316 C 320 245 260 245 230 316" />
-        <PracticePathLine active={activeModeId === 'note-to-solfeggio'} d="M 490 360 L 670 360" />
-        <PracticePathLine active={activeModeId === 'solfeggio-to-note'} d="M 670 336 L 490 336" />
-        <PracticePathLine active={activeModeId === 'solfeggio-to-positions'} d="M 690 316 C 515 230 350 230 230 316" />
-        <PracticePathLine active={activeModeId === 'board-to-solfeggio'} d="M 220 400 C 390 490 555 490 720 400" />
+        <PracticePathLine active={activeModeId === 'tab-to-note'} d="M 450 124 L 450 286" />
+        <PracticePathLine active={activeModeId === 'tab-to-solfeggio'} d="M 508 106 C 650 128 735 190 750 286" />
+        <PracticePathLine active={activeModeId === 'note-to-positions'} d="M 392 300 L 208 300" />
+        <PracticePathLine active={activeModeId === 'board-to-note'} d="M 208 340 L 392 340" />
+        <PracticePathLine active={activeModeId === 'solfeggio-to-note'} d="M 692 300 L 508 300" />
+        <PracticePathLine active={activeModeId === 'note-to-solfeggio'} d="M 508 340 L 692 340" />
+        <PracticePathLine active={activeModeId === 'board-to-solfeggio'} d="M 150 374 C 280 432 620 432 750 374" />
+        <PracticePathLine active={activeModeId === 'solfeggio-to-positions'} d="M 750 374 C 620 486 280 486 150 374" />
       </svg>
 
-      <PracticeGraphNode left="50%" top="16%" label="六线谱" helper="六条线" />
-      <PracticeGraphNode left="20%" top="70%" label="指板位置" helper="弦 + 品" />
-      <PracticeGraphNode left="50%" top="70%" label="音名" helper="C D E" />
+      <PracticeGraphNode left="50%" top="17%" label="六线谱" helper="六条线" />
+      <PracticeGraphNode left="17%" top="65%" label="指板位置" helper="弦 + 品" />
+      <PracticeGraphNode left="50%" top="65%" label="音名" helper="C D E" />
       <PracticeGraphNode
-        left="80%"
-        top="70%"
+        left="83%"
+        top="65%"
         label="唱名"
         helper={solfeggioDisplayMode === 'number' ? '1 2 3' : 'Do Re Mi'}
       />

@@ -133,3 +133,4 @@
 | 2026-05-04 | 待发布 | 六线谱练习取消二级混合入口：只保留 `六线谱 -> 音名` 与 `六线谱 -> 唱名`，避免读谱训练过早混合导致任务目标不清晰 | `src/App.tsx`、`docs/product/practice-path-interaction-framework-spec.md`、`tests/e2e/mvp-practice.spec.ts` |
 | 2026-05-04 | 待发布 | 指板记忆训练组整合：将一级“位置音名/位置唱名”合并为“指板记忆”，二级横向分为音名组与唱名组，并将速查页命名为“指板速查” | `src/App.tsx`、`docs/product/practice-path-interaction-framework-spec.md`、`tests/e2e/mvp-practice.spec.ts` |
 | 2026-05-04 | 待发布 | 指板记忆二级分类简化：移除唱名组内局部当前调选择，统一复用页面顶部全局调性控件 | `src/App.tsx`、`docs/product/practice-path-interaction-framework-spec.md`、`tests/e2e/mvp-practice.spec.ts` |
+| 2026-05-04 | 待发布 | 图选通路图布局优化：改为分层节点、平行双向边和底部外围弧线，减少交叉、遮挡和按钮压线 | `src/App.tsx`、`docs/product/practice-path-interaction-framework-spec.md` |
