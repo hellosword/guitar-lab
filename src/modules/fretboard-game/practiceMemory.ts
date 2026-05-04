@@ -108,6 +108,11 @@ export interface PracticeMemoryHighlight {
   outcome: PracticeOutcome;
 }
 
+export interface PracticeMemoryHighlightFilter {
+  key?: PracticeKey;
+  mappingKinds?: MappingKind[];
+}
+
 type SolfeggioFormatter = (solfeggio: Solfeggio) => string;
 
 export const PRACTICE_MEMORY_STORAGE_KEY = 'guitarLab.practiceMemory.v1';
@@ -503,14 +508,18 @@ export function getPracticeMemoryHighlights(
   memory: PracticeMemoryDocumentV1,
   limit = 4,
   formatSolfeggio: SolfeggioFormatter = (solfeggio) => solfeggio,
+  filter: PracticeMemoryHighlightFilter = {},
 ): PracticeMemoryHighlight[] {
   const eventByItemKey = new Map<string, PracticeEventV1>();
+  const mappingKinds = filter.mappingKinds === undefined ? null : new Set(filter.mappingKinds);
 
   for (const event of memory.recentEvents.slice(-80)) {
     eventByItemKey.set(event.itemKey, event);
   }
 
   return Object.values(memory.masteryMap)
+    .filter((entry) => filter.key === undefined || entry.key === filter.key)
+    .filter((entry) => mappingKinds === null || mappingKinds.has(entry.mappingKind))
     .filter((entry) => entry.weaknessScore > 0)
     .sort((a, b) => b.weaknessScore - a.weaknessScore || new Date(b.lastSeenAt).getTime() - new Date(a.lastSeenAt).getTime())
     .slice(0, limit)

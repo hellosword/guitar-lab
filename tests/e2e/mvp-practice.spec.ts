@@ -26,6 +26,21 @@ async function answerCurrentSolfeggioQuestion(page: Page): Promise<void> {
   await expect(page.getByText('答对了')).toHaveCount(0, { timeout: 4_000 });
 }
 
+async function answerCurrentSolfeggioQuestionWrongAndContinue(page: Page): Promise<void> {
+  const noteNames = ['G', 'A', 'B', 'C', 'D', 'E', 'F#'];
+  const currentNote = await Promise.all(noteNames.map(async (noteName) => (
+    (await page.getByText(noteName, { exact: true }).isVisible().catch(() => false)) ? noteName : null
+  ))).then((results) => results.find((noteName): noteName is string => noteName !== null));
+
+  if (currentNote === undefined) {
+    throw new Error('没有找到当前音名唱名题的音名');
+  }
+
+  await page.getByRole('button', { name: currentNote === 'G' ? 'Re' : 'Do', exact: true }).click();
+  await expect(page.getByText('再记一次')).toBeVisible();
+  await page.getByRole('button', { name: /下一题|查看总结/ }).click();
+}
+
 test('MVP 练习页可见并能完成一道音名题', async ({ page }) => {
   await page.goto('/');
 
@@ -286,6 +301,87 @@ test('音名唱名题使用当前调性的连续首调八度播放音高', async
   }
 
   expect([...expectedPositions.keys()]).toEqual([]);
+});
+
+test('音名唱名总结页不会显示内部播放位置', async ({ page }) => {
+  const positionItemKey = 'position-to-note|G major|A|Re|5-0';
+  const noteSolfeggioItemKey = 'note-to-solfeggio|G major|B|Mi|';
+  const memory = {
+    schemaVersion: 1,
+    appVersion: '0.0.33',
+    createdAt: '2026-05-04T00:00:00.000Z',
+    updatedAt: '2026-05-04T00:00:00.000Z',
+    profile: { id: 'test-profile' },
+    configSnapshot: {
+      schemaVersion: 1,
+      recentWindowSize: 50,
+      minSamplesForRelativeSlow: 10,
+      slowPercentile: 0.7,
+      slowMedianMultiplier: 1.35,
+      maxValidResponseMs: 60000,
+    },
+    masteryMap: {
+      [positionItemKey]: {
+        itemKey: positionItemKey,
+        mappingKind: 'position-to-note',
+        key: 'G major',
+        noteName: 'A',
+        solfeggio: 'Re',
+        positionId: '5-0',
+        attempts: 4,
+        correctCount: 0,
+        wrongCount: 4,
+        slowCount: 0,
+        ignoredCount: 0,
+        averageMs: 3800,
+        lastMs: 3800,
+        recentResponseMs: [3800],
+        lastSeenAt: '2026-05-04T00:00:00.000Z',
+        weaknessScore: 99,
+        fastCorrectStreak: 0,
+      },
+      [noteSolfeggioItemKey]: {
+        itemKey: noteSolfeggioItemKey,
+        mappingKind: 'note-to-solfeggio',
+        key: 'G major',
+        noteName: 'B',
+        solfeggio: 'Mi',
+        attempts: 2,
+        correctCount: 0,
+        wrongCount: 2,
+        slowCount: 0,
+        ignoredCount: 0,
+        averageMs: 2600,
+        lastMs: 2600,
+        recentResponseMs: [2600],
+        lastSeenAt: '2026-05-04T00:00:00.000Z',
+        weaknessScore: 4,
+        fastCorrectStreak: 0,
+      },
+    },
+    responseGroups: {},
+    recentEvents: [],
+  };
+
+  await page.addInitScript((storedMemory) => {
+    window.localStorage.setItem('guitarLab.practiceMemory.v1', JSON.stringify(storedMemory));
+  }, memory);
+  await page.goto('/');
+  await page.getByRole('button', { name: '音名唱名' }).click();
+
+  for (let index = 0; index < 20; index += 1) {
+    await answerCurrentSolfeggioQuestionWrongAndContinue(page);
+  }
+
+  await expect(page.getByRole('heading', { name: '本轮总结' })).toBeVisible();
+  const weakestPanel = page.getByText('最需要巩固').locator('..');
+  const memoryFocusPanel = page.getByText('本轮重点').locator('..');
+
+  await expect(weakestPanel).toContainText('G 大调:');
+  await expect(weakestPanel).not.toContainText('弦');
+  await expect(memoryFocusPanel).toContainText('->');
+  await expect(memoryFocusPanel).not.toContainText('弦');
+  await expect(memoryFocusPanel).not.toContainText('@');
 });
 
 test('位置输入类练习会共享位置级自适应记录并显示弱点地图', async ({ page }) => {

@@ -230,6 +230,40 @@ function formatAnswerValue(answer: PracticeAnswerValue, solfeggioDisplayMode: So
   return isSolfeggio(answer) ? formatSolfeggio(answer, solfeggioDisplayMode) : answer;
 }
 
+function formatQuestionSummaryTarget(question: MvpQuestion, solfeggioDisplayMode: SolfeggioDisplayMode): string {
+  const keyLabel = question.key === 'G major' ? 'G 大调' : 'C 大调';
+
+  if (question.type === 'note-to-solfeggio') {
+    return `${keyLabel}: ${question.noteName} -> ${formatSolfeggio(question.solfeggio, solfeggioDisplayMode)}`;
+  }
+
+  if (question.type === 'note-to-positions') {
+    return `${keyLabel}: ${question.noteName}`;
+  }
+
+  return `${formatPosition(question.position)}：${question.noteName} / ${formatSolfeggio(question.solfeggio, solfeggioDisplayMode)}`;
+}
+
+function getPracticeModeHighlightMappingKinds(modeId: PracticeModeId): MappingKind[] | undefined {
+  if (modeId === 'mixed') {
+    return undefined;
+  }
+
+  if (modeId === 'note-to-solfeggio') {
+    return ['note-to-solfeggio'];
+  }
+
+  if (modeId === 'note-to-positions') {
+    return ['note-to-position'];
+  }
+
+  if (modeId === 'board-to-note' || modeId === 'tab-to-note') {
+    return ['position-to-note'];
+  }
+
+  return ['position-to-solfeggio'];
+}
+
 function getPositionStatsKey(question: MvpQuestion, position: FretPosition): string {
   return `${question.key}|${question.type}|${question.noteName}|${getPositionId(position)}`;
 }
@@ -644,8 +678,12 @@ function App() {
       practiceMemory,
       4,
       (solfeggio) => formatSolfeggio(solfeggio, solfeggioDisplayMode),
+      {
+        key: config.key,
+        mappingKinds: getPracticeModeHighlightMappingKinds(config.modeId),
+      },
     ),
-    [practiceMemory, solfeggioDisplayMode],
+    [practiceMemory, solfeggioDisplayMode, config.key, config.modeId],
   );
   const positionsToClick = currentQuestion === undefined ? [] : getPositionsToClick(currentQuestion, masteredAnswerPositions);
 
@@ -1162,7 +1200,7 @@ function App() {
                       <div className="mt-3 space-y-2">
                         {summary.weakest.map((record) => (
                           <p key={`${record.question.id}-${record.responseMs}`} className="text-sm text-slate-300">
-                            {formatPosition(record.question.position)}：{record.question.noteName} / {formatSolfeggio(record.question.solfeggio, solfeggioDisplayMode)}
+                            {formatQuestionSummaryTarget(record.question, solfeggioDisplayMode)}
                             ，{record.isCorrect ? '答对但偏慢' : '答错'}，耗时 {formatMs(record.responseMs)}
                           </p>
                         ))}
