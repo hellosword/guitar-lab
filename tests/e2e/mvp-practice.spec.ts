@@ -328,6 +328,22 @@ test('唱名反向题型会出题并写入独立历史记录', async ({ page }) 
   );
 });
 
+test('组内混合不会抽到组外题型', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: '音名唱名', exact: true }).click();
+  await page.getByRole('button', { name: '音名唱名混合', exact: true }).click();
+  await expect(page.getByText(/在当前调里，这个(音名唱什么|唱名对应什么音名)？/)).toBeVisible();
+  await expect(page.getByRole('img', { name: '吉他指板' })).toHaveCount(0);
+  await expect(page.getByRole('img', { name: '单音六线谱' })).toHaveCount(0);
+
+  await page.getByRole('button', { name: '六线谱', exact: true }).click();
+  await page.getByRole('button', { name: '六线谱混合', exact: true }).click();
+  await expect(page.getByText(/六线谱上的这个位置/)).toBeVisible();
+  await expect(page.getByRole('img', { name: '单音六线谱' })).toBeVisible();
+  await expect(page.getByRole('img', { name: '吉他指板' })).toHaveCount(0);
+});
+
 test('音名唱名题使用当前调性的连续首调八度播放音高', async ({ page }) => {
   const expectedPositions = new Map([
     ['G', '3 弦 0 品'],

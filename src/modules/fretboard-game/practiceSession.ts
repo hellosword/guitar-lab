@@ -126,8 +126,14 @@ const PRACTICE_GROUP_TYPE_WEIGHTS: Record<PracticeGroupModeId, Record<MvpQuestio
 };
 
 function pickByWeight(weights: Record<MvpQuestionType, number>, index: number): MvpQuestionType {
-  const entries = Object.entries(weights) as Array<[MvpQuestionType, number]>;
+  const entries = (Object.entries(weights) as Array<[MvpQuestionType, number]>)
+    .filter(([, weight]) => weight > 0);
   const totalWeight = entries.reduce((sum, [, weight]) => sum + weight, 0);
+
+  if (entries.length === 0 || totalWeight <= 0) {
+    throw new Error('题型权重配置至少需要包含一个正权重题型');
+  }
+
   const marker = ((index * 37) % 100) / 100 * totalWeight;
   let cursor = 0;
 
