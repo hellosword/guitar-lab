@@ -23,6 +23,7 @@ import type {
   MvpQuestion,
   MvpQuestionType,
   PracticeAnswerValue,
+  PracticeGroupModeId,
   PracticeModeId,
   PracticeSummary,
 } from './types';
@@ -34,12 +35,18 @@ export interface PracticeModeOption {
 
 export const PRACTICE_MODE_OPTIONS: PracticeModeOption[] = [
   { id: 'mixed', label: '综合练习' },
+  { id: 'position-note-mixed', label: '位置音名' },
+  { id: 'position-solfeggio-mixed', label: '位置唱名' },
+  { id: 'note-solfeggio-mixed', label: '音名唱名' },
+  { id: 'tab-reading-mixed', label: '六线谱识读' },
   { id: 'board-to-note', label: '指板音名' },
   { id: 'board-to-solfeggio', label: '指板唱名' },
   { id: 'tab-to-note', label: '六线谱音名' },
   { id: 'tab-to-solfeggio', label: '六线谱唱名' },
   { id: 'note-to-solfeggio', label: '音名唱名' },
+  { id: 'solfeggio-to-note', label: '唱名音名' },
   { id: 'note-to-positions', label: '音名定位' },
+  { id: 'solfeggio-to-positions', label: '唱名定位' },
 ];
 
 export function getDefaultFretRangeForKey(key: PracticeKey): [number, number] {
@@ -53,12 +60,14 @@ export const DEFAULT_MVP_CONFIG: MvpPracticeConfig = {
   stringRange: [1, 6],
   questionCount: 20,
   questionTypeWeights: {
-    'board-to-note': 0.25,
-    'board-to-solfeggio': 0.22,
-    'tab-to-note': 0.18,
-    'tab-to-solfeggio': 0.13,
+    'board-to-note': 0.18,
+    'board-to-solfeggio': 0.16,
+    'tab-to-note': 0.13,
+    'tab-to-solfeggio': 0.11,
     'note-to-solfeggio': 0.1,
+    'solfeggio-to-note': 0.1,
     'note-to-positions': 0.12,
+    'solfeggio-to-positions': 0.1,
   },
 };
 
@@ -68,7 +77,52 @@ const QUESTION_PROMPTS: Record<MvpQuestionType, string> = {
   'tab-to-note': '六线谱上的这个位置是什么音名？',
   'tab-to-solfeggio': '在当前调里，六线谱上的这个位置唱什么？',
   'note-to-solfeggio': '在当前调里，这个音名唱什么？',
+  'solfeggio-to-note': '在当前调里，这个唱名对应什么音名？',
   'note-to-positions': '在空指板上找出所有这个音名的位置',
+  'solfeggio-to-positions': '在空指板上找出所有这个唱名的位置',
+};
+
+const PRACTICE_GROUP_TYPE_WEIGHTS: Record<PracticeGroupModeId, Record<MvpQuestionType, number>> = {
+  'position-note-mixed': {
+    'board-to-note': 1,
+    'board-to-solfeggio': 0,
+    'tab-to-note': 0,
+    'tab-to-solfeggio': 0,
+    'note-to-solfeggio': 0,
+    'solfeggio-to-note': 0,
+    'note-to-positions': 1,
+    'solfeggio-to-positions': 0,
+  },
+  'position-solfeggio-mixed': {
+    'board-to-note': 0,
+    'board-to-solfeggio': 1,
+    'tab-to-note': 0,
+    'tab-to-solfeggio': 0,
+    'note-to-solfeggio': 0,
+    'solfeggio-to-note': 0,
+    'note-to-positions': 0,
+    'solfeggio-to-positions': 1,
+  },
+  'note-solfeggio-mixed': {
+    'board-to-note': 0,
+    'board-to-solfeggio': 0,
+    'tab-to-note': 0,
+    'tab-to-solfeggio': 0,
+    'note-to-solfeggio': 1,
+    'solfeggio-to-note': 1,
+    'note-to-positions': 0,
+    'solfeggio-to-positions': 0,
+  },
+  'tab-reading-mixed': {
+    'board-to-note': 0,
+    'board-to-solfeggio': 0,
+    'tab-to-note': 1,
+    'tab-to-solfeggio': 1,
+    'note-to-solfeggio': 0,
+    'solfeggio-to-note': 0,
+    'note-to-positions': 0,
+    'solfeggio-to-positions': 0,
+  },
 };
 
 function pickByWeight(weights: Record<MvpQuestionType, number>, index: number): MvpQuestionType {
@@ -174,16 +228,25 @@ function getPositionInputWeight(
 }
 
 function resolveQuestionType(config: MvpPracticeConfig, index: number): MvpQuestionType {
-  return config.modeId === 'mixed' ? pickByWeight(config.questionTypeWeights, index) : config.modeId;
+  if (config.modeId === 'mixed') {
+    return pickByWeight(config.questionTypeWeights, index);
+  }
+
+  if (config.modeId in PRACTICE_GROUP_TYPE_WEIGHTS) {
+    return pickByWeight(PRACTICE_GROUP_TYPE_WEIGHTS[config.modeId as keyof typeof PRACTICE_GROUP_TYPE_WEIGHTS], index);
+  }
+
+  return config.modeId as MvpQuestionType;
 }
 
 function getNoteToPositionWeight(
   memory: PracticeMemoryDocumentV1 | undefined,
   key: PracticeKey,
   position: FretPosition,
+  mappingKind: Extract<MappingKind, 'note-to-position' | 'solfeggio-to-position'> = 'note-to-position',
 ): number {
   const schedulerConfig = ADAPTIVE_PRACTICE_CONFIG.noteToPositionScheduler.staticWeight;
-  const entry = getNoteToPositionEntry(memory, key, position);
+  const entry = getNoteToPositionEntry(memory, key, position, mappingKind);
   const weaknessScore = entry?.weaknessScore ?? 0;
   const weaknessBonus = Math.min(weaknessScore, schedulerConfig.maxWeaknessBonus);
 
@@ -197,6 +260,7 @@ function getNoteToPositionEntry(
   memory: PracticeMemoryDocumentV1 | undefined,
   key: PracticeKey,
   position: FretPosition,
+  mappingKind: Extract<MappingKind, 'note-to-position' | 'solfeggio-to-position'> = 'note-to-position',
 ): MasteryEntryV1 | undefined {
   if (memory === undefined) {
     return undefined;
@@ -207,26 +271,28 @@ function getNoteToPositionEntry(
 
   return solfeggio === null
     ? undefined
-    : memory.masteryMap[createPracticeItemKey('note-to-position', key, noteName, solfeggio, position)];
+    : memory.masteryMap[createPracticeItemKey(mappingKind, key, noteName, solfeggio, position)];
 }
 
-function getNoteToSolfeggioEntry(
+function getNoteSolfeggioEntry(
   memory: PracticeMemoryDocumentV1 | undefined,
   key: PracticeKey,
   noteName: SharpNoteName,
   solfeggio: Solfeggio,
+  mappingKind: Extract<MappingKind, 'note-to-solfeggio' | 'solfeggio-to-note'> = 'note-to-solfeggio',
 ): MasteryEntryV1 | undefined {
-  return memory?.masteryMap[createPracticeItemKey('note-to-solfeggio', key, noteName, solfeggio)];
+  return memory?.masteryMap[createPracticeItemKey(mappingKind, key, noteName, solfeggio)];
 }
 
-function getNoteToSolfeggioWeight(
+function getNoteSolfeggioWeight(
   memory: PracticeMemoryDocumentV1 | undefined,
   key: PracticeKey,
   noteName: SharpNoteName,
   solfeggio: Solfeggio,
+  mappingKind: Extract<MappingKind, 'note-to-solfeggio' | 'solfeggio-to-note'> = 'note-to-solfeggio',
 ): number {
   const schedulerConfig = ADAPTIVE_PRACTICE_CONFIG.noteToSolfeggioScheduler.staticWeight;
-  const entry = getNoteToSolfeggioEntry(memory, key, noteName, solfeggio);
+  const entry = getNoteSolfeggioEntry(memory, key, noteName, solfeggio, mappingKind);
   const weaknessScore = entry?.weaknessScore ?? 0;
   const weaknessBonus = Math.min(weaknessScore, schedulerConfig.maxWeaknessBonus);
 
@@ -410,6 +476,7 @@ function getNoteToSolfeggioCandidates(
   config: MvpPracticeConfig,
   state: NoteToSolfeggioSchedulerState,
   memory?: PracticeMemoryDocumentV1,
+  mappingKind: Extract<MappingKind, 'note-to-solfeggio' | 'solfeggio-to-note'> = 'note-to-solfeggio',
 ): NoteToSolfeggioCandidate[] {
   const octavePositions = getSolfeggioOctavePositions(config);
 
@@ -419,7 +486,7 @@ function getNoteToSolfeggioCandidates(
       return [];
     }
 
-    const staticWeight = getNoteToSolfeggioWeight(memory, config.key, noteName, solfeggio);
+    const staticWeight = getNoteSolfeggioWeight(memory, config.key, noteName, solfeggio, mappingKind);
     const dynamicWeight = state.dynamicWeightByNoteName[noteName] ?? 0;
     return [{
       noteName,
@@ -491,8 +558,9 @@ function pickScheduledNoteToSolfeggioTarget(
   fallbackPosition: FretPosition,
   state: NoteToSolfeggioSchedulerState,
   memory?: PracticeMemoryDocumentV1,
+  mappingKind: Extract<MappingKind, 'note-to-solfeggio' | 'solfeggio-to-note'> = 'note-to-solfeggio',
 ): NoteToSolfeggioCandidate {
-  const candidates = getNoteToSolfeggioCandidates(config, state, memory);
+  const candidates = getNoteToSolfeggioCandidates(config, state, memory, mappingKind);
   const baseWeight = ADAPTIVE_PRACTICE_CONFIG.noteToSolfeggioScheduler.staticWeight.baseWeight;
   const hasAdaptivePressure = candidates.some((candidate) => candidate.weight !== baseWeight);
 
@@ -529,10 +597,11 @@ function pickScheduledNoteToPositionTarget(
   index: number,
   state: NoteToPositionSchedulerState,
   memory?: PracticeMemoryDocumentV1,
+  mappingKind: Extract<MappingKind, 'note-to-position' | 'solfeggio-to-position'> = 'note-to-position',
 ): NoteToPositionCandidate {
   const candidates = getCandidatePositions(config).map((position) => {
     const positionId = getPositionId(position);
-    const staticWeight = getNoteToPositionWeight(memory, config.key, position);
+    const staticWeight = getNoteToPositionWeight(memory, config.key, position, mappingKind);
     const dynamicWeight = state.dynamicWeightByPositionId[positionId] ?? 0;
 
     return {
@@ -609,9 +678,10 @@ function getAssistedPositionsForScheduledNote(
   focusPosition: FretPosition,
   index: number,
   memory?: PracticeMemoryDocumentV1,
+  mappingKind: Extract<MappingKind, 'note-to-position' | 'solfeggio-to-position'> = 'note-to-position',
 ): FretPosition[] {
   return targetPositions.filter((position) => {
-    const entry = getNoteToPositionEntry(memory, config.key, position);
+    const entry = getNoteToPositionEntry(memory, config.key, position, mappingKind);
 
     return !isSamePosition(position, focusPosition)
       && isMasteredNoteToPositionEntry(entry)
@@ -650,8 +720,9 @@ export function createQuestion(
   );
   const type = resolveQuestionType(config, index);
 
-  if (type === 'note-to-positions') {
-    const target = pickScheduledNoteToPositionTarget(config, index, noteToPositionSchedulerState, memory);
+  if (type === 'note-to-positions' || type === 'solfeggio-to-positions') {
+    const positionMappingKind = type === 'solfeggio-to-positions' ? 'solfeggio-to-position' : 'note-to-position';
+    const target = pickScheduledNoteToPositionTarget(config, index, noteToPositionSchedulerState, memory, positionMappingKind);
     const targetNoteName = target.noteName;
     const targetSolfeggio = getSolfeggioInKey(targetNoteName, config.key);
     const targetPositions = getPositionsForNote(config, targetNoteName);
@@ -661,6 +732,7 @@ export function createQuestion(
       target.position,
       index,
       memory,
+      positionMappingKind,
     );
 
     if (targetSolfeggio === null || targetPositions.length === 0) {
@@ -681,21 +753,23 @@ export function createQuestion(
       assistedPositions,
       prompt: QUESTION_PROMPTS[type],
       answerKind: 'positions',
-      sourceMedium: 'note',
+      sourceMedium: type === 'solfeggio-to-positions' ? 'solfeggio' : 'note',
       isFocusNote: config.key === 'G major' && targetNoteName === 'F#',
-      isWeakFocus: getNoteToPositionWeight(memory, config.key, target.position) > ADAPTIVE_PRACTICE_CONFIG.noteToPositionScheduler.staticWeight.baseWeight,
+      isWeakFocus: getNoteToPositionWeight(memory, config.key, target.position, positionMappingKind) > ADAPTIVE_PRACTICE_CONFIG.noteToPositionScheduler.staticWeight.baseWeight,
     };
   }
 
   const fallbackPosition = pickPosition(positions, index);
 
-  if (type === 'note-to-solfeggio') {
+  if (type === 'note-to-solfeggio' || type === 'solfeggio-to-note') {
+    const noteSolfeggioMappingKind = type === 'solfeggio-to-note' ? 'solfeggio-to-note' : 'note-to-solfeggio';
     const target = pickScheduledNoteToSolfeggioTarget(
       config,
       index,
       fallbackPosition,
       noteToSolfeggioSchedulerState,
       memory,
+      noteSolfeggioMappingKind,
     );
 
     updateNoteToSolfeggioDynamicWeights(config, target.noteName, noteToSolfeggioSchedulerState);
@@ -707,13 +781,13 @@ export function createQuestion(
       position: target.position,
       noteName: target.noteName,
       solfeggio: target.solfeggio,
-      answer: target.solfeggio,
+      answer: type === 'solfeggio-to-note' ? target.noteName : target.solfeggio,
       targetPositions: [target.position],
       prompt: QUESTION_PROMPTS[type],
-      answerKind: 'solfeggio',
-      sourceMedium: 'note',
+      answerKind: type === 'solfeggio-to-note' ? 'note' : 'solfeggio',
+      sourceMedium: type === 'solfeggio-to-note' ? 'solfeggio' : 'note',
       isFocusNote: config.key === 'G major' && target.noteName === 'F#',
-      isWeakFocus: getNoteToSolfeggioWeight(memory, config.key, target.noteName, target.solfeggio) > ADAPTIVE_PRACTICE_CONFIG.noteToSolfeggioScheduler.staticWeight.baseWeight,
+      isWeakFocus: getNoteSolfeggioWeight(memory, config.key, target.noteName, target.solfeggio, noteSolfeggioMappingKind) > ADAPTIVE_PRACTICE_CONFIG.noteToSolfeggioScheduler.staticWeight.baseWeight,
     };
   }
 

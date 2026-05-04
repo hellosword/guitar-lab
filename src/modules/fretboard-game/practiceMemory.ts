@@ -8,7 +8,9 @@ export type MappingKind =
   | 'position-to-note'
   | 'position-to-solfeggio'
   | 'note-to-solfeggio'
-  | 'note-to-position';
+  | 'solfeggio-to-note'
+  | 'note-to-position'
+  | 'solfeggio-to-position';
 
 export type PracticeOutcome =
   | 'correct'
@@ -224,8 +226,16 @@ export function getMappingKindForQuestion(question: MvpQuestion): MappingKind {
     return 'note-to-position';
   }
 
+  if (question.type === 'solfeggio-to-positions') {
+    return 'solfeggio-to-position';
+  }
+
   if (question.type === 'note-to-solfeggio') {
     return 'note-to-solfeggio';
+  }
+
+  if (question.type === 'solfeggio-to-note') {
+    return 'solfeggio-to-note';
   }
 
   return question.answerKind === 'note' ? 'position-to-note' : 'position-to-solfeggio';
@@ -258,7 +268,7 @@ export function createQuestionPracticeItem(
     question.key,
     question.noteName,
     question.solfeggio,
-    mappingKind === 'note-to-solfeggio' ? undefined : question.position,
+    mappingKind === 'note-to-solfeggio' || mappingKind === 'solfeggio-to-note' ? undefined : question.position,
   );
 
   return {
@@ -267,7 +277,7 @@ export function createQuestionPracticeItem(
     itemKey,
     noteName: question.noteName,
     solfeggio: question.solfeggio,
-    position: mappingKind === 'note-to-solfeggio' ? undefined : question.position,
+    position: mappingKind === 'note-to-solfeggio' || mappingKind === 'solfeggio-to-note' ? undefined : question.position,
     isCorrect,
     responseMs,
     outcomeOnFailure: 'wrong',
@@ -283,7 +293,7 @@ export function createPositionPracticeItem(
 ): PracticeMemoryItem {
   const noteName = getNoteAtPosition(position);
   const solfeggio = getSolfeggioInKey(noteName, question.key) ?? undefined;
-  const mappingKind: MappingKind = 'note-to-position';
+  const mappingKind: MappingKind = question.type === 'solfeggio-to-positions' ? 'solfeggio-to-position' : 'note-to-position';
 
   return {
     question,
@@ -546,8 +556,16 @@ export function formatPracticeMemoryEntry(
     return `${keyLabel}: ${entry.noteName ?? '-'} -> ${entry.solfeggio === undefined ? '-' : formatSolfeggio(entry.solfeggio)}`;
   }
 
+  if (entry.mappingKind === 'solfeggio-to-note') {
+    return `${keyLabel}: ${entry.solfeggio === undefined ? '-' : formatSolfeggio(entry.solfeggio)} -> ${entry.noteName ?? '-'}`;
+  }
+
   if (entry.mappingKind === 'note-to-position') {
     return `${keyLabel}: ${entry.noteName ?? '-'}${positionLabel}`;
+  }
+
+  if (entry.mappingKind === 'solfeggio-to-position') {
+    return `${keyLabel}: ${entry.solfeggio === undefined ? '-' : formatSolfeggio(entry.solfeggio)}${positionLabel}`;
   }
 
   return `${keyLabel}: ${positionLabel} -> ${entry.noteName ?? '-'}${entry.solfeggio === undefined ? '' : ` / ${formatSolfeggio(entry.solfeggio)}`}`;

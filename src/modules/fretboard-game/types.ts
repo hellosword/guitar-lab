@@ -6,9 +6,17 @@ export type MvpQuestionType =
   | 'tab-to-note'
   | 'tab-to-solfeggio'
   | 'note-to-solfeggio'
-  | 'note-to-positions';
+  | 'solfeggio-to-note'
+  | 'note-to-positions'
+  | 'solfeggio-to-positions';
 
-export type PracticeModeId = 'mixed' | MvpQuestionType;
+export type PracticeGroupModeId =
+  | 'position-note-mixed'
+  | 'position-solfeggio-mixed'
+  | 'note-solfeggio-mixed'
+  | 'tab-reading-mixed';
+
+export type PracticeModeId = 'mixed' | PracticeGroupModeId | MvpQuestionType;
 export type AnswerValue = SharpNoteName | Solfeggio;
 export type PositionAnswerValue = FretPosition[];
 export type PracticeAnswerValue = AnswerValue | PositionAnswerValue;
@@ -34,7 +42,7 @@ export interface MvpQuestion {
   assistedPositions?: FretPosition[];
   prompt: string;
   answerKind: 'note' | 'solfeggio' | 'positions';
-  sourceMedium: 'board' | 'tab' | 'note';
+  sourceMedium: 'board' | 'tab' | 'note' | 'solfeggio';
   isFocusNote: boolean;
   isWeakFocus?: boolean;
 }

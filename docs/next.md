@@ -128,3 +128,4 @@
 | 2026-05-04 | v0.0.34 | 音名唱名题播放音高修正：按当前调性选定一组连续首调八度，避免同一练习中音名被播放到不同八度 | `src/modules/fretboard-game/practiceSession.ts` |
 | 2026-05-04 | v0.0.34 | 答对自动下一题节奏修正：同时满足最小等待 500ms 和当前音高播放结束后才进入下一题，减少音频重叠 | `src/lib/audio.ts`、`src/App.tsx`、`src/modules/fretboard-game/practiceInteractionConfig.ts`、`tests/e2e/mvp-practice.spec.ts` |
 | 2026-05-04 | v0.0.34 | 音名唱名总结页去位置化：总结重点和慢错项按当前通路展示 `音名 -> 唱名`，不再泄漏内部播放位置 | `src/App.tsx`、`src/modules/fretboard-game/practiceMemory.ts`、`tests/e2e/mvp-practice.spec.ts` |
+| 2026-05-04 | 待发布 | 练习模式层级改造：以“综合、位置音名、位置唱名、音名唱名、六线谱”作为一级训练组，组内提供两个方向与混合，并补齐 `唱名 -> 音名`、`唱名 -> 位置` 题型及历史记录 | `src/App.tsx`、`src/modules/fretboard-game/practiceSession.ts`、`src/modules/fretboard-game/practiceMemory.ts`、`src/modules/fretboard-game/types.ts`、`docs/product/practice-path-interaction-framework-spec.md`、`tests/e2e/mvp-practice.spec.ts` |

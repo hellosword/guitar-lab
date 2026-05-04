@@ -33,7 +33,6 @@ import {
   getMissingPositions,
   isAnswerCorrect,
   isSlowAnswer,
-  PRACTICE_MODE_OPTIONS,
 } from './modules/fretboard-game/practiceSession';
 import { ADAPTIVE_PRACTICE_CONFIG } from './modules/fretboard-game/adaptivePracticeConfig';
 import { PRACTICE_INTERACTION_CONFIG } from './modules/fretboard-game/practiceInteractionConfig';
@@ -87,6 +86,14 @@ interface PracticePathOption {
   };
 }
 
+interface PracticeGroupOption {
+  id: 'mixed' | 'position-note' | 'position-solfeggio' | 'note-solfeggio' | 'tab-reading';
+  label: string;
+  description: string;
+  defaultModeId: PracticeModeId;
+  modeIds: PracticeModeId[];
+}
+
 const PRACTICE_PATH_OPTIONS: PracticePathOption[] = [
   {
     id: 'mixed',
@@ -95,6 +102,38 @@ const PRACTICE_PATH_OPTIONS: PracticePathOption[] = [
     label: '综合练习',
     description: '混合当前已启用的认知通路，适合日常热身和整体检查。',
     weaknessAvailable: false,
+  },
+  {
+    id: 'position-note-mixed',
+    from: '位置/音名',
+    to: '混合',
+    label: '位置音名混合',
+    description: '混合练习位置到音名、音名到位置两个方向。',
+    weaknessAvailable: true,
+  },
+  {
+    id: 'position-solfeggio-mixed',
+    from: '位置/唱名',
+    to: '混合',
+    label: '位置唱名混合',
+    description: '混合练习位置到唱名、唱名到位置两个方向。',
+    weaknessAvailable: true,
+  },
+  {
+    id: 'note-solfeggio-mixed',
+    from: '音名/唱名',
+    to: '混合',
+    label: '音名唱名混合',
+    description: '混合练习音名到唱名、唱名到音名两个方向。',
+    weaknessAvailable: true,
+  },
+  {
+    id: 'tab-reading-mixed',
+    from: '六线谱',
+    to: '混合',
+    label: '六线谱混合',
+    description: '混合练习六线谱到音名、六线谱到唱名两个方向。',
+    weaknessAvailable: true,
   },
   {
     id: 'board-to-note',
@@ -142,6 +181,15 @@ const PRACTICE_PATH_OPTIONS: PracticePathOption[] = [
     edgePosition: { left: '66%', top: '66%' },
   },
   {
+    id: 'solfeggio-to-note',
+    from: '唱名',
+    to: '音名',
+    label: '唱名 -> 音名',
+    description: '看到当前调里的首调唱名后，快速反应对应音名。',
+    weaknessAvailable: true,
+    edgePosition: { left: '64%', top: '58%' },
+  },
+  {
     id: 'note-to-positions',
     from: '音名',
     to: '指板位置',
@@ -149,6 +197,53 @@ const PRACTICE_PATH_OPTIONS: PracticePathOption[] = [
     description: '看到音名后，在空指板上找出当前范围内的所有位置。',
     weaknessAvailable: true,
     edgePosition: { left: '34%', top: '52%' },
+  },
+  {
+    id: 'solfeggio-to-positions',
+    from: '唱名',
+    to: '指板位置',
+    label: '唱名 -> 位置',
+    description: '看到当前调里的首调唱名后，在空指板上找出所有对应位置。',
+    weaknessAvailable: true,
+    edgePosition: { left: '52%', top: '52%' },
+  },
+];
+
+const PRACTICE_GROUP_OPTIONS: PracticeGroupOption[] = [
+  {
+    id: 'mixed',
+    label: '综合',
+    description: '全系统混合复习。',
+    defaultModeId: 'mixed',
+    modeIds: ['mixed'],
+  },
+  {
+    id: 'position-note',
+    label: '位置音名',
+    description: '训练指板位置和音名之间的双向反应。',
+    defaultModeId: 'position-note-mixed',
+    modeIds: ['board-to-note', 'note-to-positions', 'position-note-mixed'],
+  },
+  {
+    id: 'position-solfeggio',
+    label: '位置唱名',
+    description: '训练指板位置和当前调唱名之间的双向反应。',
+    defaultModeId: 'position-solfeggio-mixed',
+    modeIds: ['board-to-solfeggio', 'solfeggio-to-positions', 'position-solfeggio-mixed'],
+  },
+  {
+    id: 'note-solfeggio',
+    label: '音名唱名',
+    description: '训练音名和当前调唱名之间的双向反应。',
+    defaultModeId: 'note-solfeggio-mixed',
+    modeIds: ['note-to-solfeggio', 'solfeggio-to-note', 'note-solfeggio-mixed'],
+  },
+  {
+    id: 'tab-reading',
+    label: '六线谱',
+    description: '训练从六线谱位置读出音名和唱名。',
+    defaultModeId: 'tab-reading-mixed',
+    modeIds: ['tab-to-note', 'tab-to-solfeggio', 'tab-reading-mixed'],
   },
 ];
 
@@ -183,6 +278,7 @@ interface WeaknessMapEntry {
 
 interface NoteSolfeggioWeaknessEntry {
   itemKey: string;
+  mappingKind: MappingKind;
   noteName: SharpNoteName;
   solfeggio: string;
   attempts: number;
@@ -211,11 +307,22 @@ function formatRange(config: MvpPracticeConfig): string {
 }
 
 function getPracticeModeLabel(modeId: PracticeModeId): string {
-  return PRACTICE_MODE_OPTIONS.find((mode) => mode.id === modeId)?.label ?? '综合练习';
+  return getPracticePathOption(modeId).label;
 }
 
 function getPracticePathOption(modeId: PracticeModeId): PracticePathOption {
   return PRACTICE_PATH_OPTIONS.find((path) => path.id === modeId) ?? PRACTICE_PATH_OPTIONS[0];
+}
+
+function getPracticeGroupOption(modeId: PracticeModeId): PracticeGroupOption {
+  return PRACTICE_GROUP_OPTIONS.find((group) => group.modeIds.includes(modeId)) ?? PRACTICE_GROUP_OPTIONS[0];
+}
+
+function getPracticeDirectionOptions(modeId: PracticeModeId): PracticePathOption[] {
+  const group = getPracticeGroupOption(modeId);
+  return group.modeIds
+    .map((directionModeId) => getPracticePathOption(directionModeId))
+    .filter((path) => path.id !== 'mixed');
 }
 
 function formatPositions(positions: FretPosition[]): string {
@@ -237,8 +344,16 @@ function formatQuestionSummaryTarget(question: MvpQuestion, solfeggioDisplayMode
     return `${keyLabel}: ${question.noteName} -> ${formatSolfeggio(question.solfeggio, solfeggioDisplayMode)}`;
   }
 
+  if (question.type === 'solfeggio-to-note') {
+    return `${keyLabel}: ${formatSolfeggio(question.solfeggio, solfeggioDisplayMode)} -> ${question.noteName}`;
+  }
+
   if (question.type === 'note-to-positions') {
     return `${keyLabel}: ${question.noteName}`;
+  }
+
+  if (question.type === 'solfeggio-to-positions') {
+    return `${keyLabel}: ${formatSolfeggio(question.solfeggio, solfeggioDisplayMode)}`;
   }
 
   return `${formatPosition(question.position)}：${question.noteName} / ${formatSolfeggio(question.solfeggio, solfeggioDisplayMode)}`;
@@ -253,8 +368,32 @@ function getPracticeModeHighlightMappingKinds(modeId: PracticeModeId): MappingKi
     return ['note-to-solfeggio'];
   }
 
+  if (modeId === 'solfeggio-to-note') {
+    return ['solfeggio-to-note'];
+  }
+
+  if (modeId === 'note-solfeggio-mixed') {
+    return ['note-to-solfeggio', 'solfeggio-to-note'];
+  }
+
   if (modeId === 'note-to-positions') {
     return ['note-to-position'];
+  }
+
+  if (modeId === 'solfeggio-to-positions') {
+    return ['solfeggio-to-position'];
+  }
+
+  if (modeId === 'position-note-mixed') {
+    return ['position-to-note', 'note-to-position'];
+  }
+
+  if (modeId === 'position-solfeggio-mixed') {
+    return ['position-to-solfeggio', 'solfeggio-to-position'];
+  }
+
+  if (modeId === 'tab-reading-mixed') {
+    return ['position-to-note', 'position-to-solfeggio'];
   }
 
   if (modeId === 'board-to-note' || modeId === 'tab-to-note') {
@@ -268,8 +407,12 @@ function getPositionStatsKey(question: MvpQuestion, position: FretPosition): str
   return `${question.key}|${question.type}|${question.noteName}|${getPositionId(position)}`;
 }
 
+function getPositionAnswerMappingKind(question: MvpQuestion): Extract<MappingKind, 'note-to-position' | 'solfeggio-to-position'> {
+  return question.type === 'solfeggio-to-positions' ? 'solfeggio-to-position' : 'note-to-position';
+}
+
 function getPositionMemoryKey(question: MvpQuestion, position: FretPosition): string {
-  return createPracticeItemKey('note-to-position', question.key, question.noteName, question.solfeggio, position);
+  return createPracticeItemKey(getPositionAnswerMappingKind(question), question.key, question.noteName, question.solfeggio, position);
 }
 
 function isPositionMastered(
@@ -419,17 +562,33 @@ function getWeaknessMapRecentPressure(memory: PracticeMemoryDocumentV1, itemKey:
   }, 0);
 }
 
-function getPositionWeaknessMappingKind(modeId: PracticeModeId): MappingKind | null {
+function getPositionWeaknessMappingKinds(modeId: PracticeModeId): MappingKind[] | null {
   if (modeId === 'note-to-positions') {
-    return 'note-to-position';
+    return ['note-to-position'];
+  }
+
+  if (modeId === 'solfeggio-to-positions') {
+    return ['solfeggio-to-position'];
+  }
+
+  if (modeId === 'position-note-mixed') {
+    return ['position-to-note', 'note-to-position'];
+  }
+
+  if (modeId === 'position-solfeggio-mixed') {
+    return ['position-to-solfeggio', 'solfeggio-to-position'];
+  }
+
+  if (modeId === 'tab-reading-mixed') {
+    return ['position-to-note', 'position-to-solfeggio'];
   }
 
   if (modeId === 'board-to-note' || modeId === 'tab-to-note') {
-    return 'position-to-note';
+    return ['position-to-note'];
   }
 
   if (modeId === 'board-to-solfeggio' || modeId === 'tab-to-solfeggio') {
-    return 'position-to-solfeggio';
+    return ['position-to-solfeggio'];
   }
 
   return null;
@@ -442,22 +601,22 @@ function getPositionWeaknessCopy(modeId: PracticeModeId): {
   emptyDescription: string;
   noEntryText: string;
 } {
-  if (modeId === 'note-to-positions') {
+  if (modeId === 'note-to-positions' || modeId === 'solfeggio-to-positions') {
     return {
       heading: '随时查看的弱点地图',
       description: '根据近期练习事件展示当前通路的指板位置压力。暖色代表近期相对更需要关注；历史慢错仍保留在详情里。',
-      emptyTitle: '还没有音名定位记录',
-      emptyDescription: '去“练习”里选择音名定位，完成几题后这里会显示慢点、错点和熟练点。',
-      noEntryText: '这个位置还没有音名定位记录。',
+      emptyTitle: modeId === 'solfeggio-to-positions' ? '还没有唱名定位记录' : '还没有音名定位记录',
+      emptyDescription: '去“练习”里完成几题定位练习后，这里会显示慢点、错点和熟练点。',
+      noEntryText: '这个位置还没有当前定位记录。',
     };
   }
 
-  if (modeId === 'board-to-note' || modeId === 'tab-to-note') {
+  if (modeId === 'board-to-note' || modeId === 'tab-to-note' || modeId === 'position-note-mixed') {
     return {
       heading: '位置音名弱点地图',
       description: '按“位置 -> 音名”的映射统计近期压力。指板题和六线谱题会共享这条认知通路的掌握数据。',
       emptyTitle: '还没有位置音名记录',
-      emptyDescription: '去“练习”里选择指板音名或六线谱音名，完成几题后这里会显示慢反应和错答位置。',
+      emptyDescription: '去“练习”里完成几题位置音名相关练习后，这里会显示慢反应和错答位置。',
       noEntryText: '这个位置还没有位置音名记录。',
     };
   }
@@ -466,7 +625,7 @@ function getPositionWeaknessCopy(modeId: PracticeModeId): {
     heading: '位置唱名弱点地图',
     description: '按“位置 -> 唱名”的映射统计近期压力。指板题和六线谱题会共享这条认知通路的掌握数据。',
     emptyTitle: '还没有位置唱名记录',
-    emptyDescription: '去“练习”里选择指板唱名或六线谱唱名，完成几题后这里会显示慢反应和错答位置。',
+    emptyDescription: '去“练习”里完成几题位置唱名相关练习后，这里会显示慢反应和错答位置。',
     noEntryText: '这个位置还没有位置唱名记录。',
   };
 }
@@ -474,9 +633,9 @@ function getPositionWeaknessCopy(modeId: PracticeModeId): {
 function toWeaknessMapEntry(
   entry: MasteryEntryV1,
   memory: PracticeMemoryDocumentV1,
-  mappingKind: MappingKind,
+  mappingKinds: Set<MappingKind>,
 ): WeaknessMapEntry | null {
-  if (entry.mappingKind !== mappingKind || entry.noteName === undefined) {
+  if (!mappingKinds.has(entry.mappingKind) || entry.noteName === undefined) {
     return null;
   }
 
@@ -507,13 +666,15 @@ function toWeaknessMapEntry(
 function toNoteSolfeggioWeaknessEntry(
   entry: MasteryEntryV1,
   memory: PracticeMemoryDocumentV1,
+  mappingKinds: Set<MappingKind>,
 ): NoteSolfeggioWeaknessEntry | null {
-  if (entry.mappingKind !== 'note-to-solfeggio' || entry.noteName === undefined) {
+  if (!mappingKinds.has(entry.mappingKind) || entry.noteName === undefined) {
     return null;
   }
 
   return {
     itemKey: entry.itemKey,
+    mappingKind: entry.mappingKind,
     noteName: entry.noteName,
     solfeggio: entry.solfeggio ?? '未知',
     attempts: entry.attempts,
@@ -578,11 +739,12 @@ function applyWeaknessMapStatuses<T extends {
 function getWeaknessEntries(
   memory: PracticeMemoryDocumentV1,
   practiceKey: PracticeKey,
-  mappingKind: MappingKind,
+  mappingKinds: MappingKind[],
 ): WeaknessMapEntry[] {
+  const mappingKindSet = new Set(mappingKinds);
   const entries = Object.values(memory.masteryMap)
     .filter((entry) => entry.key === practiceKey)
-    .map((entry) => toWeaknessMapEntry(entry, memory, mappingKind))
+    .map((entry) => toWeaknessMapEntry(entry, memory, mappingKindSet))
     .filter((entry): entry is WeaknessMapEntry => entry !== null)
     .filter((entry) => isNoteInKey(entry.noteName, practiceKey));
 
@@ -592,10 +754,12 @@ function getWeaknessEntries(
 function getNoteSolfeggioWeaknessEntries(
   memory: PracticeMemoryDocumentV1,
   practiceKey: PracticeKey,
+  mappingKinds: MappingKind[],
 ): NoteSolfeggioWeaknessEntry[] {
+  const mappingKindSet = new Set(mappingKinds);
   const entries = Object.values(memory.masteryMap)
     .filter((entry) => entry.key === practiceKey)
-    .map((entry) => toNoteSolfeggioWeaknessEntry(entry, memory))
+    .map((entry) => toNoteSolfeggioWeaknessEntry(entry, memory, mappingKindSet))
     .filter((entry): entry is NoteSolfeggioWeaknessEntry => entry !== null)
     .filter((entry) => isNoteInKey(entry.noteName, practiceKey));
 
@@ -605,11 +769,12 @@ function getNoteSolfeggioWeaknessEntries(
 function getOffKeyMistakeEntries(
   memory: PracticeMemoryDocumentV1,
   practiceKey: PracticeKey,
-  mappingKind: MappingKind,
+  mappingKinds: MappingKind[],
 ): WeaknessMapEntry[] {
+  const mappingKindSet = new Set(mappingKinds);
   return Object.values(memory.masteryMap)
     .filter((entry) => entry.key === practiceKey && entry.wrongCount > 0)
-    .map((entry) => toWeaknessMapEntry(entry, memory, mappingKind))
+    .map((entry) => toWeaknessMapEntry(entry, memory, mappingKindSet))
     .filter((entry): entry is WeaknessMapEntry => entry !== null)
     .filter((entry) => !isNoteInKey(entry.noteName, practiceKey));
 }
@@ -1316,6 +1481,21 @@ function App() {
                       </div>
                     </div>
                   )}
+                  {currentQuestion.sourceMedium === 'solfeggio' && (
+                    <div className="grid min-h-[220px] place-items-center rounded-lg bg-[#171420]">
+                      <div className="text-center">
+                        <p className="text-sm text-slate-500">唱名</p>
+                        <p className="mt-3 text-7xl font-bold text-white">
+                          {formatSolfeggio(currentQuestion.solfeggio, solfeggioDisplayMode)}
+                        </p>
+                        <p className="mt-3 text-sm text-slate-400">
+                          {currentQuestion.answerKind === 'positions'
+                            ? `在${formatRange(config)}内找出所有 ${formatSolfeggio(currentQuestion.solfeggio, solfeggioDisplayMode)}`
+                            : `${currentQuestion.key === 'G major' ? 'G 大调' : 'C 大调'}中对应什么音名？`}
+                        </p>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {currentQuestion.answerKind === 'positions' && (
@@ -1433,6 +1613,8 @@ function PracticePathSelector({
   onShowWeakness,
 }: PracticePathSelectorProps) {
   const activePath = getPracticePathOption(activeModeId);
+  const activeGroup = getPracticeGroupOption(activeModeId);
+  const directionOptions = getPracticeDirectionOptions(activeModeId);
   const [isGraphOpen, setIsGraphOpen] = useState(false);
 
   function handleGraphPathSelect(modeId: PracticeModeId): void {
@@ -1489,23 +1671,45 @@ function PracticePathSelector({
         </div>
 
         <div className="flex flex-wrap gap-2">
-          {PRACTICE_PATH_OPTIONS.map((path) => (
+          {PRACTICE_GROUP_OPTIONS.map((group) => (
             <button
-              key={path.id}
+              key={group.id}
               type="button"
-              onClick={() => onPathSelect(path.id)}
-              title={path.description}
+              onClick={() => onPathSelect(group.defaultModeId)}
+              title={group.description}
               className={`h-8 rounded-md border px-3 text-sm font-semibold transition ${
-                activeModeId === path.id
+                activeGroup.id === group.id
                   ? 'border-guitar-accent bg-guitar-accent text-white'
                   : 'border-white/15 bg-white/8 text-slate-200 hover:bg-white/15'
               }`}
-              aria-pressed={activeModeId === path.id}
+              aria-pressed={activeGroup.id === group.id}
             >
-              {getPracticeModeLabel(path.id)}
+              {group.label}
             </button>
           ))}
         </div>
+
+        {directionOptions.length > 1 && (
+          <div className="flex flex-wrap items-center gap-2 border-t border-white/10 pt-2">
+            <span className="text-xs text-slate-500">方向</span>
+            {directionOptions.map((path) => (
+              <button
+                key={path.id}
+                type="button"
+                onClick={() => onPathSelect(path.id)}
+                title={path.description}
+                className={`h-7 rounded-md border px-2 text-xs font-semibold transition ${
+                  activeModeId === path.id
+                    ? 'border-white bg-white text-slate-950'
+                    : 'border-white/15 bg-white/8 text-slate-200 hover:bg-white/15'
+                }`}
+                aria-pressed={activeModeId === path.id}
+              >
+                {path.label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {isGraphOpen && (
@@ -1595,6 +1799,8 @@ function PracticePathGraph({ activeModeId, solfeggioDisplayMode, onPathSelect }:
         <PracticePathLine active={activeModeId === 'board-to-note'} d="M 230 360 L 410 360" />
         <PracticePathLine active={activeModeId === 'note-to-positions'} d="M 410 316 C 320 245 260 245 230 316" />
         <PracticePathLine active={activeModeId === 'note-to-solfeggio'} d="M 490 360 L 670 360" />
+        <PracticePathLine active={activeModeId === 'solfeggio-to-note'} d="M 670 336 L 490 336" />
+        <PracticePathLine active={activeModeId === 'solfeggio-to-positions'} d="M 690 316 C 515 230 350 230 230 316" />
         <PracticePathLine active={activeModeId === 'board-to-solfeggio'} d="M 220 400 C 390 490 555 490 720 400" />
       </svg>
 
@@ -1805,6 +2011,7 @@ function PositionHuntPanel({ foundCount, targetCount, masteredCount, isComplete 
 function FeedbackPanel({ record, solfeggioDisplayMode, isLast, onNext, onReplay }: FeedbackPanelProps) {
   const { question } = record;
   const isPositionAnswer = question.answerKind === 'positions';
+  const shouldShowPosition = question.sourceMedium === 'board' || question.sourceMedium === 'tab';
 
   return (
     <div className={`rounded-lg border p-4 ${record.isCorrect ? 'border-emerald-400/40 bg-emerald-400/10' : 'border-rose-400/40 bg-rose-400/10'}`}>
@@ -1812,7 +2019,7 @@ function FeedbackPanel({ record, solfeggioDisplayMode, isLast, onNext, onReplay 
       <div className="mt-3 space-y-2 text-sm text-slate-200">
         <p>你的答案：{formatAnswerValue(record.userAnswer, solfeggioDisplayMode)}</p>
         <p>正确答案：{formatAnswerValue(question.answer, solfeggioDisplayMode)}</p>
-        {!isPositionAnswer && <p>位置：{formatPosition(question.position)}</p>}
+        {!isPositionAnswer && shouldShowPosition && <p>位置：{formatPosition(question.position)}</p>}
         <p>音名：{question.noteName}</p>
         <p>{question.key === 'G major' ? 'G 大调' : 'C 大调'}唱名：{formatSolfeggio(question.solfeggio, solfeggioDisplayMode)}</p>
         {isPositionAnswer ? (
@@ -1822,7 +2029,7 @@ function FeedbackPanel({ record, solfeggioDisplayMode, isLast, onNext, onReplay 
           </>
         ) : (
           <p>
-            反应链：{formatPosition(question.position)} {'->'} {question.noteName} {'->'} {formatSolfeggio(question.solfeggio, solfeggioDisplayMode)}
+            反应链：{formatQuestionSummaryTarget(question, solfeggioDisplayMode)}
           </p>
         )}
         <p>耗时：{formatMs(record.responseMs)}{record.isSlow ? '，需要巩固' : ''}</p>
@@ -1830,6 +2037,7 @@ function FeedbackPanel({ record, solfeggioDisplayMode, isLast, onNext, onReplay 
 
       <button
         type="button"
+        title={`重播音高：${formatPosition(question.position)}`}
         onClick={() => {
           onReplay().catch(() => {
             // 音频失败不阻塞下一题。
@@ -2099,6 +2307,7 @@ interface NoteSolfeggioWeaknessViewProps {
   memory: PracticeMemoryDocumentV1;
   solfeggioDisplayMode: SolfeggioDisplayMode;
   pathLabel: string;
+  mappingKinds: MappingKind[];
 }
 
 function NoteSolfeggioWeaknessView({
@@ -2106,9 +2315,10 @@ function NoteSolfeggioWeaknessView({
   memory,
   solfeggioDisplayMode,
   pathLabel,
+  mappingKinds,
 }: NoteSolfeggioWeaknessViewProps) {
   const [selectedItemKey, setSelectedItemKey] = useState<string | null>(null);
-  const entries = getNoteSolfeggioWeaknessEntries(memory, practiceKey);
+  const entries = getNoteSolfeggioWeaknessEntries(memory, practiceKey, mappingKinds);
   const entryByNoteName = new Map(entries.map((entry) => [entry.noteName, entry]));
   const topEntries = sortNoteSolfeggioWeaknessEntries(entries)
     .filter((entry) => entry.status === 'danger' || entry.status === 'slow')
@@ -2119,6 +2329,13 @@ function NoteSolfeggioWeaknessView({
     ? topEntries[0] ?? entries[0] ?? null
     : entries.find((entry) => entry.itemKey === selectedItemKey) ?? null;
   const mapping = getKeySolfeggioMap(practiceKey);
+
+  function formatEntryPair(entry: Pick<NoteSolfeggioWeaknessEntry, 'mappingKind' | 'noteName' | 'solfeggio'>): string {
+    const solfeggioLabel = formatWeaknessSolfeggio(entry.solfeggio, solfeggioDisplayMode);
+    return entry.mappingKind === 'solfeggio-to-note'
+      ? `${solfeggioLabel} -> ${entry.noteName}`
+      : `${entry.noteName} -> ${solfeggioLabel}`;
+  }
 
   function getStatusClass(status: WeaknessStatus): string {
     if (status === 'danger') {
@@ -2194,7 +2411,7 @@ function NoteSolfeggioWeaknessView({
                       <div>
                         <p className="text-xs uppercase tracking-[0.18em] text-current/65">Mapping</p>
                         <p className="mt-2 text-2xl font-bold">
-                          {item.noteName} {'->'} {formatSolfeggio(item.solfeggio, solfeggioDisplayMode)}
+                          {item.noteName} {'<->'} {formatSolfeggio(item.solfeggio, solfeggioDisplayMode)}
                         </p>
                       </div>
                       <span
@@ -2244,7 +2461,7 @@ function NoteSolfeggioWeaknessView({
               >
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-sm font-semibold text-slate-100">
-                    {entry.noteName} {'->'} {formatWeaknessSolfeggio(entry.solfeggio, solfeggioDisplayMode)}
+                    {formatEntryPair(entry)}
                   </p>
                   <span className="rounded-md bg-white/10 px-2 py-1 text-xs text-slate-300">
                     {WEAKNESS_STATUS_LABELS[entry.status]}
@@ -2265,7 +2482,7 @@ function NoteSolfeggioWeaknessView({
             <p className="mt-2 text-sm leading-6 text-slate-500">点击左侧任意映射查看详情。</p>
           ) : (
             <div className="mt-3 space-y-2 text-sm text-slate-300">
-              <p>音名/唱名：{selectedEntry.noteName} / {formatWeaknessSolfeggio(selectedEntry.solfeggio, solfeggioDisplayMode)}</p>
+              <p>映射：{formatEntryPair(selectedEntry)}</p>
               <p>状态：{WEAKNESS_STATUS_LABELS[selectedEntry.status]}</p>
               <p>尝试：{selectedEntry.attempts}，正确 {selectedEntry.correctCount}，错误 {selectedEntry.wrongCount}</p>
               <p>近期压力：{selectedEntry.recentPressure.toFixed(1)}，弱点分 {selectedEntry.weaknessScore}</p>
@@ -2291,20 +2508,25 @@ function WeaknessMapView({
   pathLabel,
   onPositionClick,
 }: WeaknessMapViewProps) {
-  if (modeId === 'note-to-solfeggio') {
+  const noteSolfeggioMappingKinds = getPracticeModeHighlightMappingKinds(modeId)?.filter((mappingKind) => (
+    mappingKind === 'note-to-solfeggio' || mappingKind === 'solfeggio-to-note'
+  )) ?? [];
+
+  if (noteSolfeggioMappingKinds.length > 0) {
     return (
       <NoteSolfeggioWeaknessView
         practiceKey={practiceKey}
         memory={memory}
         solfeggioDisplayMode={solfeggioDisplayMode}
         pathLabel={pathLabel}
+        mappingKinds={noteSolfeggioMappingKinds}
       />
     );
   }
 
-  const mappingKind = getPositionWeaknessMappingKind(modeId);
+  const mappingKinds = getPositionWeaknessMappingKinds(modeId);
 
-  if (mappingKind === null) {
+  if (mappingKinds === null) {
     return (
       <section className="grid min-h-[260px] place-items-center rounded-lg border border-white/10 bg-white/10 p-6 text-center">
         <div>
@@ -2316,8 +2538,8 @@ function WeaknessMapView({
   }
 
   const copy = getPositionWeaknessCopy(modeId);
-  const entries = getWeaknessEntries(memory, practiceKey, mappingKind);
-  const offKeyEntries = getOffKeyMistakeEntries(memory, practiceKey, mappingKind);
+  const entries = getWeaknessEntries(memory, practiceKey, mappingKinds);
+  const offKeyEntries = getOffKeyMistakeEntries(memory, practiceKey, mappingKinds);
   const topEntries = sortWeaknessEntries(entries)
     .filter((entry) => entry.status === 'danger' || entry.status === 'slow')
     .slice(0, 5);
