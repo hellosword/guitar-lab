@@ -194,6 +194,29 @@ test('MVP 练习页可见并能完成一道音名题', async ({ page }) => {
   await expect(page.getByRole('button', { name: '下一题' })).toBeVisible();
 });
 
+test('390px 手机竖屏下指板有横滑提示且页面不横向溢出', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/');
+
+  const pageMetrics = await page.evaluate(() => ({
+    clientWidth: document.documentElement.clientWidth,
+    scrollWidth: document.documentElement.scrollWidth,
+  }));
+  expect(pageMetrics.scrollWidth).toBeLessThanOrEqual(pageMetrics.clientWidth + 1);
+
+  await expect(page.getByText('指板可横向滑动，右侧还有品位。').first()).toBeVisible();
+
+  const fretboardScroll = page.getByTestId('fretboard-scroll').first();
+  const fretboardMetrics = await fretboardScroll.evaluate((element) => ({
+    ariaLabel: element.getAttribute('aria-label'),
+    clientWidth: element.clientWidth,
+    scrollWidth: element.scrollWidth,
+  }));
+
+  expect(fretboardMetrics.ariaLabel).toContain('可横向滚动的吉他指板');
+  expect(fretboardMetrics.scrollWidth).toBeGreaterThan(fretboardMetrics.clientWidth);
+});
+
 test('单选题会把作答区放在题面下方并保留右侧详情', async ({ page }) => {
   await page.goto('/');
 

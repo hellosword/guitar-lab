@@ -2,7 +2,7 @@
  * 指板图 SVG 组件
  * 用于展示吉他指板、高亮品格、接收点击输入
  */
-import type { MouseEvent } from 'react';
+import { useId, type MouseEvent } from 'react';
 import { formatPosition, getPositionId, isSamePosition } from '../../domain/theory';
 import type { FretPosition, GuitarString } from '../../types/theory';
 
@@ -58,6 +58,7 @@ export default function Fretboard({
   getPositionLabel,
   onPositionClick,
 }: FretboardProps) {
+  const scrollHintId = useId();
   const width = 760;
   const height = 260;
   const left = 74;
@@ -105,13 +106,25 @@ export default function Fretboard({
   }
 
   return (
-    <svg
-      viewBox={`0 0 ${width} ${height}`}
-      className={`w-full min-w-[520px] sm:min-w-0 ${onPositionClick !== undefined ? 'cursor-pointer touch-manipulation' : ''}`}
-      role="img"
-      aria-label="吉他指板"
-      onClick={handleSvgClick}
-    >
+    <div className="min-w-0">
+      <p id={scrollHintId} className="mb-2 text-xs text-slate-400 sm:hidden">
+        指板可横向滑动，右侧还有品位。
+      </p>
+      <div className="relative min-w-0">
+        <div
+          data-testid="fretboard-scroll"
+          className="overflow-x-auto overscroll-x-contain pb-2 [-webkit-overflow-scrolling:touch]"
+          tabIndex={0}
+          aria-describedby={scrollHintId}
+          aria-label={`可横向滚动的吉他指板，显示 0 到 ${fretCount} 品`}
+        >
+          <svg
+            viewBox={`0 0 ${width} ${height}`}
+            className={`block w-full min-w-[520px] sm:min-w-0 ${onPositionClick !== undefined ? 'cursor-pointer touch-manipulation' : ''}`}
+            role="img"
+            aria-label="吉他指板"
+            onClick={handleSvgClick}
+          >
       <rect x={left} y={top - 14} width={boardWidth} height={boardHeight + 28} rx="8" fill="#241f2f" />
 
       {Array.from({ length: fretCount + 2 }, (_, fretIndex) => {
@@ -229,6 +242,13 @@ export default function Fretboard({
           );
         })
       ))}
-    </svg>
+          </svg>
+        </div>
+        <div
+          className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-[#242131] to-transparent sm:hidden"
+          aria-hidden="true"
+        />
+      </div>
+    </div>
   );
 }
