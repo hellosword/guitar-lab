@@ -1842,13 +1842,11 @@ function MobilePracticeSettingsSheet({
 
   function selectPath(modeId: PracticeModeId): void {
     onPathSelect(modeId);
-    onClose();
   }
 
   function handleGraphPathSelect(modeId: PracticeModeId): void {
     onPathSelect(modeId);
     setIsGraphOpen(false);
-    onClose();
   }
 
   return (
@@ -1858,9 +1856,9 @@ function MobilePracticeSettingsSheet({
         role="dialog"
         aria-modal="true"
         aria-label="练习设置"
-        className="fixed inset-x-0 bottom-0 z-50 max-h-[88vh] overflow-y-auto rounded-t-xl border border-white/10 bg-[#202331] p-4 shadow-2xl lg:hidden"
+        className="fixed inset-x-0 bottom-0 z-50 max-h-[92vh] overflow-y-auto rounded-t-xl border border-white/10 bg-[#202331] p-3 shadow-2xl lg:hidden"
       >
-        <div className="mx-auto mb-4 h-1 w-12 rounded-full bg-white/25" />
+        <div className="mx-auto mb-3 h-1 w-12 rounded-full bg-white/25" />
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Practice Settings</p>
@@ -1876,7 +1874,7 @@ function MobilePracticeSettingsSheet({
           </button>
         </div>
 
-        <div className="mt-5 space-y-5">
+        <div className="mt-4 space-y-4">
           <div>
             <div className="mb-2 flex items-center justify-between gap-2">
               <p className="text-sm font-semibold text-slate-200">练习模式</p>
@@ -1888,16 +1886,16 @@ function MobilePracticeSettingsSheet({
                 图选通路
               </button>
             </div>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-4 overflow-hidden rounded-md border border-white/15 bg-black/20">
               {PRACTICE_GROUP_OPTIONS.map((group) => (
                 <button
                   key={group.id}
                   type="button"
                   onClick={() => selectPath(group.defaultModeId)}
-                  className={`h-10 rounded-md border px-3 text-sm font-semibold transition ${
+                  className={`h-10 border-r border-white/10 px-1 text-xs font-semibold transition last:border-r-0 ${
                     activeGroup.id === group.id
-                      ? 'border-guitar-accent bg-guitar-accent text-white'
-                      : 'border-white/15 bg-white/8 text-slate-200'
+                      ? 'bg-guitar-accent text-white'
+                      : 'text-slate-200'
                   }`}
                   aria-pressed={activeGroup.id === group.id}
                 >
@@ -1910,16 +1908,16 @@ function MobilePracticeSettingsSheet({
           {directionOptions.length > 1 && directionGroups === null && (
             <div>
               <p className="mb-2 text-sm font-semibold text-slate-200">方向</p>
-              <div className="grid grid-cols-2 gap-2">
+              <div className={`grid overflow-hidden rounded-md border border-white/15 bg-black/20 ${directionOptions.length >= 3 ? 'grid-cols-3' : 'grid-cols-2'}`}>
                 {directionOptions.map((path) => (
                   <button
                     key={path.id}
                     type="button"
                     onClick={() => selectPath(path.id)}
-                    className={`h-10 rounded-md border px-3 text-sm font-semibold transition ${
+                    className={`h-10 border-r border-white/10 px-1 text-xs font-semibold transition last:border-r-0 ${
                       activeModeId === path.id
-                        ? 'border-white bg-white text-slate-950'
-                        : 'border-white/15 bg-white/8 text-slate-200'
+                        ? 'bg-white text-slate-950'
+                        : 'text-slate-200'
                     }`}
                     aria-pressed={activeModeId === path.id}
                   >
@@ -1931,11 +1929,11 @@ function MobilePracticeSettingsSheet({
           )}
 
           {directionGroups !== null && (
-            <div className="space-y-3">
+            <div className="space-y-2">
               {directionGroups.map((group) => (
-                <div key={group.id} className="grid grid-cols-[3.5rem_minmax(0,1fr)] items-center gap-2">
+                <div key={group.id} className="grid grid-cols-[3rem_minmax(0,1fr)] items-center gap-2">
                   <p className="text-sm text-slate-500">{group.label}</p>
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-3 overflow-hidden rounded-md border border-white/15 bg-black/20">
                     {group.modeIds.map((modeId) => {
                       const path = getPracticePathOption(modeId);
                       return (
@@ -1943,10 +1941,10 @@ function MobilePracticeSettingsSheet({
                           key={modeId}
                           type="button"
                           onClick={() => selectPath(modeId)}
-                          className={`h-10 rounded-md border px-2 text-sm font-semibold transition ${
+                          className={`h-10 border-r border-white/10 px-1 text-xs font-semibold transition last:border-r-0 ${
                             activeModeId === modeId
-                              ? 'border-white bg-white text-slate-950'
-                              : 'border-white/15 bg-white/8 text-slate-200'
+                              ? 'bg-white text-slate-950'
+                              : 'text-slate-200'
                           }`}
                           aria-pressed={activeModeId === modeId}
                         >
@@ -2000,10 +1998,7 @@ function MobilePracticeSettingsSheet({
                 <button
                   key={key}
                   type="button"
-                  onClick={() => {
-                    onKeyChange(key);
-                    onClose();
-                  }}
+                onClick={() => onKeyChange(key)}
                   className={`h-10 rounded-md border text-sm font-semibold transition ${
                     activeKey === key
                       ? 'border-guitar-accent bg-guitar-accent text-white'

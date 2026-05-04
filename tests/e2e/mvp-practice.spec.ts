@@ -47,6 +47,9 @@ function isMobileViewport(page: Page): boolean {
 
 async function openMobileSettings(page: Page): Promise<void> {
   if (isMobileViewport(page)) {
+    if (await page.getByRole('dialog', { name: '练习设置' }).isVisible().catch(() => false)) {
+      return;
+    }
     await page.getByRole('button', { name: '设置' }).click();
     await expect(page.getByRole('dialog', { name: '练习设置' })).toBeVisible();
   }
@@ -62,9 +65,10 @@ async function closeMobileSettings(page: Page): Promise<void> {
 async function selectDirection(page: Page, groupName: string, directionName: string): Promise<void> {
   if (isMobileViewport(page)) {
     await openMobileSettings(page);
-    await page.getByRole('dialog', { name: '练习设置' }).getByRole('button', { name: groupName, exact: true }).click();
-    await openMobileSettings(page);
-    await page.getByRole('dialog', { name: '练习设置' }).getByRole('button', { name: directionName, exact: true }).click();
+    const settingsDialog = page.getByRole('dialog', { name: '练习设置' });
+    await settingsDialog.getByRole('button', { name: groupName, exact: true }).click();
+    await settingsDialog.getByRole('button', { name: directionName, exact: true }).click();
+    await closeMobileSettings(page);
     return;
   }
 
@@ -85,6 +89,7 @@ async function selectKey(page: Page, keyName: 'G 大调' | 'C 大调'): Promise<
   if (isMobileViewport(page)) {
     await openMobileSettings(page);
     await page.getByRole('dialog', { name: '练习设置' }).getByRole('button', { name: keyName }).click();
+    await closeMobileSettings(page);
     return;
   }
 
