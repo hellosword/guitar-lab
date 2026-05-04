@@ -249,8 +249,8 @@ const PRACTICE_GROUP_OPTIONS: PracticeGroupOption[] = [
     id: 'tab-reading',
     label: '六线谱',
     description: '训练从六线谱位置读出音名和唱名。',
-    defaultModeId: 'tab-reading-mixed',
-    modeIds: ['tab-to-note', 'tab-to-solfeggio', 'tab-reading-mixed'],
+    defaultModeId: 'tab-to-note',
+    modeIds: ['tab-to-note', 'tab-to-solfeggio'],
   },
 ];
 

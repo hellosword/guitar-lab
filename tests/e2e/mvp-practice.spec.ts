@@ -335,7 +335,7 @@ test('唱名反向题型会出题并写入独立历史记录', async ({ page }) 
   );
 });
 
-test('组内混合不会抽到组外题型', async ({ page }) => {
+test('组内混合不会抽到组外题型且六线谱不提供混合', async ({ page }) => {
   await page.goto('/');
 
   await page.getByRole('button', { name: '音名唱名', exact: true }).click();
@@ -345,8 +345,8 @@ test('组内混合不会抽到组外题型', async ({ page }) => {
   await expect(page.getByRole('img', { name: '单音六线谱' })).toHaveCount(0);
 
   await page.getByRole('button', { name: '六线谱', exact: true }).click();
-  await page.getByRole('button', { name: '混合', exact: true }).click();
-  await expect(page.getByText(/六线谱上的这个位置/)).toBeVisible();
+  await expect(page.getByRole('button', { name: '混合', exact: true })).toHaveCount(0);
+  await expect(page.getByText('六线谱上的这个位置是什么音名？')).toBeVisible();
   await expect(page.getByRole('img', { name: '单音六线谱' })).toBeVisible();
   await expect(page.getByRole('img', { name: '吉他指板' })).toHaveCount(0);
 });

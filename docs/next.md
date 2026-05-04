@@ -129,5 +129,6 @@
 | 2026-05-04 | v0.0.34 | 答对自动下一题节奏修正：同时满足最小等待 500ms 和当前音高播放结束后才进入下一题，减少音频重叠 | `src/lib/audio.ts`、`src/App.tsx`、`src/modules/fretboard-game/practiceInteractionConfig.ts`、`tests/e2e/mvp-practice.spec.ts` |
 | 2026-05-04 | v0.0.34 | 音名唱名总结页去位置化：总结重点和慢错项按当前通路展示 `音名 -> 唱名`，不再泄漏内部播放位置 | `src/App.tsx`、`src/modules/fretboard-game/practiceMemory.ts`、`tests/e2e/mvp-practice.spec.ts` |
 | 2026-05-04 | 待发布 | 练习模式层级改造：以“综合、位置音名、位置唱名、音名唱名、六线谱”作为一级训练组，组内提供两个方向与混合，并补齐 `唱名 -> 音名`、`唱名 -> 位置` 题型及历史记录 | `src/App.tsx`、`src/modules/fretboard-game/practiceSession.ts`、`src/modules/fretboard-game/practiceMemory.ts`、`src/modules/fretboard-game/types.ts`、`docs/product/practice-path-interaction-framework-spec.md`、`tests/e2e/mvp-practice.spec.ts` |
-| 2026-05-04 | 待发布 | 组内混合抽题修复：过滤 0 权重题型，避免音名唱名混合、六线谱混合误抽到指板题，并增加回归测试 | `src/modules/fretboard-game/practiceSession.ts`、`tests/e2e/mvp-practice.spec.ts` |
+| 2026-05-04 | 待发布 | 组内混合抽题修复：过滤 0 权重题型，避免音名唱名混合等组内混合误抽到组外题型，并增加回归测试 | `src/modules/fretboard-game/practiceSession.ts`、`tests/e2e/mvp-practice.spec.ts` |
+| 2026-05-04 | 待发布 | 六线谱练习取消二级混合入口：只保留 `六线谱 -> 音名` 与 `六线谱 -> 唱名`，避免读谱训练过早混合导致任务目标不清晰 | `src/App.tsx`、`docs/product/practice-path-interaction-framework-spec.md`、`tests/e2e/mvp-practice.spec.ts` |
 | 2026-05-04 | 待发布 | 指板记忆训练组整合：将一级“位置音名/位置唱名”合并为“指板记忆”，二级横向分为音名组与带当前调选择的唱名组，并将速查页命名为“指板速查” | `src/App.tsx`、`docs/product/practice-path-interaction-framework-spec.md`、`tests/e2e/mvp-practice.spec.ts` |
