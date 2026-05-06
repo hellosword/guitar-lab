@@ -165,3 +165,4 @@
 | 2026-05-04 | v0.0.36 | 移动端第一轮交互打磨：指板图在窄屏中保持更大的可点击宽度并在卡片内横向滚动，图选通路图改为窄屏内部横向滚动，补充页面横向溢出回归测试 | `src/components/Fretboard/index.tsx`、`src/App.tsx`、`tests/e2e/mvp-practice.spec.ts` |
 | 2026-05-04 | 待发布 | 移动端开发架构准备：抽离 `domain` 核心层、`app` 应用服务层与 `desktop` 桌面交互壳，保留现有行为不变 | `src/domain/`、`src/app/`、`src/desktop/DesktopApp.tsx`、`src/App.tsx` |
 | 2026-05-04 | 待发布 | 移动端 Focus Mode 第一版：手机端改用顶部上下文栏、设置 Sheet、底部练习/速查/弱点导航与移动端题后反馈区，桌面端保持原布局 | `src/desktop/DesktopApp.tsx`、`src/components/NoteSelector/index.tsx`、`src/components/SolfeggioSelector/index.tsx`、`tests/e2e/mvp-practice.spec.ts` |
+| 2026-05-06 | 待发布 | 移动端导航结构校准：底部改为练习/速查/我，弱点进入练习页顶部二级 tab，练习通路改为顶部折叠面板，低频偏好和数据管理移入“我” | `src/desktop/DesktopApp.tsx`、`tests/e2e/mvp-practice.spec.ts` |

@@ -69,7 +69,7 @@ const FAST_POSITION_RESPONSE_MS = 2500;
 const MASTERED_FAST_STREAK = 2;
 const GUITAR_TONE_STORAGE_KEY = 'guitar-lab:guitar-tone';
 const BUILD_LABEL = __GIT_COMMIT__ === 'unknown' ? __GIT_BRANCH__ : `${__GIT_BRANCH__}@${__GIT_COMMIT__}`;
-type AppView = 'practice' | 'reference';
+type AppView = 'practice' | 'reference' | 'profile';
 type PracticeSubView = 'train' | 'weakness';
 type FretboardMarkerMode = 'note' | 'solfeggio';
 
@@ -1291,6 +1291,8 @@ function App() {
   const activePath = getPracticePathOption(config.modeId);
   const mobileViewLabel = activeView === 'reference'
     ? '指板速查'
+    : activeView === 'profile'
+      ? '我的设置'
     : practiceSubView === 'weakness'
       ? '弱点地图'
       : activePath.label;
@@ -1300,7 +1302,7 @@ function App() {
       <div className="mx-auto flex min-h-screen w-full max-w-6xl flex-col gap-4 px-3 pb-24 pt-3 lg:px-4 lg:pb-3">
         {!isDesktopLayout && (
         <header className="sticky top-0 z-30 -mx-3 border-b border-white/10 bg-[#11131d]/95 px-3 pb-3 pt-1 backdrop-blur">
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <div className="flex items-center gap-2">
                 <p className="text-sm font-semibold text-guitar-accent">Guitar Lab</p>
@@ -1308,19 +1310,24 @@ function App() {
                   v{APP_VERSION}
                 </span>
               </div>
-              <h1 className="mt-2 truncate text-xl font-bold text-slate-50">{mobileViewLabel}</h1>
-              <p className="mt-1 text-sm text-slate-400">
-                {config.key === 'G major' ? 'G 大调' : 'C 大调'} · {formatRange(config)}
-              </p>
+              {activeView === 'practice' ? (
+                <p className="mt-1 truncate text-sm text-slate-400">
+                  {activePath.label} · {config.key === 'G major' ? 'G 大调' : 'C 大调'} · {formatRange(config)}
+                </p>
+              ) : (
+                <h1 className="mt-1 truncate text-lg font-bold text-slate-50">{mobileViewLabel}</h1>
+              )}
             </div>
-            <button
-              type="button"
-              onClick={() => setIsMobileSettingsOpen(true)}
-              className="h-10 shrink-0 rounded-md border border-white/15 bg-white/10 px-4 text-sm font-semibold text-slate-100"
-            >
-              设置
-            </button>
           </div>
+          {activeView === 'practice' && (
+            <MobilePracticeTopTabs
+              subView={practiceSubView}
+              weaknessAvailable={activePath.weaknessAvailable}
+              onStartPractice={handleStartPractice}
+              onShowWeakness={handleShowPracticeWeakness}
+              onOpenPathPanel={() => setIsMobileSettingsOpen(true)}
+            />
+          )}
         </header>
         )}
 
@@ -1391,7 +1398,20 @@ function App() {
         </header>
         )}
 
-        {activeView === 'reference' ? (
+        {activeView === 'profile' ? (
+          <MobileProfileView
+            activeKey={config.key}
+            solfeggioDisplayMode={solfeggioDisplayMode}
+            guitarTone={guitarTone}
+            buildLabel={BUILD_LABEL}
+            onKeyChange={(key) => restartPractice(key)}
+            onSolfeggioDisplayModeChange={setSolfeggioDisplayMode}
+            onGuitarToneChange={setGuitarTone}
+            onExportPracticeMemory={handleExportPracticeMemory}
+            onImportPracticeMemory={() => importInputRef.current?.click()}
+            onClearPracticeMemory={handleClearPracticeMemory}
+          />
+        ) : activeView === 'reference' ? (
           <FretboardMemoryView
             practiceKey={config.key}
             solfeggioDisplayMode={solfeggioDisplayMode}
@@ -1712,52 +1732,50 @@ function App() {
         <>
           <MobileBottomNavigation
             activeView={activeView}
-            subView={practiceSubView}
-            weaknessAvailable={activePath.weaknessAvailable}
             onPracticeClick={handlePracticeViewClick}
             onReferenceClick={() => setActiveView('reference')}
-            onWeaknessClick={handleShowPracticeWeakness}
+            onProfileClick={() => setActiveView('profile')}
           />
           <MobilePracticeSettingsSheet
             isOpen={isMobileSettingsOpen}
             activeModeId={config.modeId}
-            activeKey={config.key}
-            subView={practiceSubView}
             solfeggioDisplayMode={solfeggioDisplayMode}
-            guitarTone={guitarTone}
-            buildLabel={BUILD_LABEL}
             onClose={() => setIsMobileSettingsOpen(false)}
             onPathSelect={handlePracticePathSelect}
-            onStartPractice={handleStartPractice}
-            onShowWeakness={handleShowPracticeWeakness}
-            onKeyChange={handleKeyChange}
-            onSolfeggioDisplayModeChange={setSolfeggioDisplayMode}
-            onGuitarToneChange={setGuitarTone}
           />
         </>
       )}
+      <input
+        ref={importInputRef}
+        type="file"
+        accept="application/json,.json"
+        className="hidden"
+        onChange={(event) => {
+          const file = event.currentTarget.files?.[0];
+          event.currentTarget.value = '';
+          if (file !== undefined) {
+            handleImportPracticeMemoryFile(file);
+          }
+        }}
+      />
     </main>
   );
 }
 
 interface MobileBottomNavigationProps {
   activeView: AppView;
-  subView: PracticeSubView;
-  weaknessAvailable: boolean;
   onPracticeClick: () => void;
   onReferenceClick: () => void;
-  onWeaknessClick: () => void;
+  onProfileClick: () => void;
 }
 
 function MobileBottomNavigation({
   activeView,
-  subView,
-  weaknessAvailable,
   onPracticeClick,
   onReferenceClick,
-  onWeaknessClick,
+  onProfileClick,
 }: MobileBottomNavigationProps) {
-  const activeItem = activeView === 'reference' ? 'reference' : subView === 'weakness' ? 'weakness' : 'practice';
+  const activeItem = activeView === 'reference' ? 'reference' : activeView === 'profile' ? 'profile' : 'practice';
 
   return (
     <nav className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-3 border-t border-white/10 bg-[#171a27]/95 p-2 backdrop-blur lg:hidden" aria-label="移动端主导航">
@@ -1781,54 +1799,91 @@ function MobileBottomNavigation({
       </button>
       <button
         type="button"
-        onClick={onWeaknessClick}
-        disabled={!weaknessAvailable}
+        onClick={onProfileClick}
         className={`h-11 rounded-md text-sm font-semibold transition ${
-          activeItem === 'weakness'
+          activeItem === 'profile'
             ? 'bg-guitar-accent text-white'
-            : weaknessAvailable
-              ? 'text-slate-200 hover:bg-white/10'
-              : 'cursor-not-allowed text-slate-600'
+            : 'text-slate-200 hover:bg-white/10'
         }`}
       >
-        弱点
+        我
       </button>
     </nav>
+  );
+}
+
+interface MobilePracticeTopTabsProps {
+  subView: PracticeSubView;
+  weaknessAvailable: boolean;
+  onStartPractice: () => void;
+  onShowWeakness: () => void;
+  onOpenPathPanel: () => void;
+}
+
+function MobilePracticeTopTabs({
+  subView,
+  weaknessAvailable,
+  onStartPractice,
+  onShowWeakness,
+  onOpenPathPanel,
+}: MobilePracticeTopTabsProps) {
+  return (
+    <div className="mt-3 flex items-center justify-between gap-2">
+      <div className="grid flex-1 grid-cols-2 overflow-hidden rounded-md border border-white/15 bg-black/20" role="tablist" aria-label="练习二级视图">
+        <button
+          type="button"
+          onClick={onStartPractice}
+          role="tab"
+          aria-selected={subView === 'train'}
+          className={`h-9 text-sm font-semibold transition ${
+            subView === 'train' ? 'bg-white text-slate-950' : 'text-slate-100'
+          }`}
+        >
+          练习
+        </button>
+        <button
+          type="button"
+          onClick={onShowWeakness}
+          disabled={!weaknessAvailable}
+          role="tab"
+          aria-selected={subView === 'weakness' && weaknessAvailable}
+          className={`h-9 border-l border-white/15 text-sm font-semibold transition ${
+            subView === 'weakness' && weaknessAvailable
+              ? 'bg-guitar-accent text-white'
+              : weaknessAvailable
+                ? 'text-slate-100'
+                : 'cursor-not-allowed text-slate-600'
+          }`}
+        >
+          弱点
+        </button>
+      </div>
+      <button
+        type="button"
+        onClick={onOpenPathPanel}
+        aria-label="展开练习通路选择"
+        className="grid h-9 w-10 shrink-0 place-items-center rounded-md border border-white/15 bg-white/10 text-base font-bold text-slate-100"
+      >
+        ▾
+      </button>
+    </div>
   );
 }
 
 interface MobilePracticeSettingsSheetProps {
   isOpen: boolean;
   activeModeId: PracticeModeId;
-  activeKey: PracticeKey;
-  subView: PracticeSubView;
   solfeggioDisplayMode: SolfeggioDisplayMode;
-  guitarTone: GuitarToneId;
-  buildLabel: string;
   onClose: () => void;
   onPathSelect: (modeId: PracticeModeId) => void;
-  onStartPractice: () => void;
-  onShowWeakness: () => void;
-  onKeyChange: (key: PracticeKey) => void;
-  onSolfeggioDisplayModeChange: (mode: SolfeggioDisplayMode) => void;
-  onGuitarToneChange: (toneId: GuitarToneId) => void;
 }
 
 function MobilePracticeSettingsSheet({
   isOpen,
   activeModeId,
-  activeKey,
-  subView,
   solfeggioDisplayMode,
-  guitarTone,
-  buildLabel,
   onClose,
   onPathSelect,
-  onStartPractice,
-  onShowWeakness,
-  onKeyChange,
-  onSolfeggioDisplayModeChange,
-  onGuitarToneChange,
 }: MobilePracticeSettingsSheetProps) {
   const activePath = getPracticePathOption(activeModeId);
   const activeGroup = getPracticeGroupOption(activeModeId);
@@ -1842,11 +1897,20 @@ function MobilePracticeSettingsSheet({
 
   function selectPath(modeId: PracticeModeId): void {
     onPathSelect(modeId);
+    onClose();
+  }
+
+  function selectGroup(group: PracticeGroupOption): void {
+    onPathSelect(group.defaultModeId);
+    if (group.modeIds.length <= 1) {
+      onClose();
+    }
   }
 
   function handleGraphPathSelect(modeId: PracticeModeId): void {
     onPathSelect(modeId);
     setIsGraphOpen(false);
+    onClose();
   }
 
   return (
@@ -1855,15 +1919,15 @@ function MobilePracticeSettingsSheet({
       <section
         role="dialog"
         aria-modal="true"
-        aria-label="练习设置"
+        aria-label="练习通路"
         className="fixed inset-x-0 bottom-0 z-50 max-h-[92vh] overflow-y-auto rounded-t-xl border border-white/10 bg-[#202331] p-3 shadow-2xl lg:hidden"
       >
         <div className="mx-auto mb-3 h-1 w-12 rounded-full bg-white/25" />
         <div className="flex items-start justify-between gap-3">
           <div>
-            <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Practice Settings</p>
-            <h2 className="mt-1 text-xl font-bold">练习设置</h2>
-            <p className="mt-1 text-sm text-slate-400">{activePath.label}</p>
+            <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Practice Path</p>
+            <h2 className="mt-1 text-xl font-bold">选择练习通路</h2>
+            <p className="mt-1 text-sm text-slate-400">{activePath.description}</p>
           </div>
           <button
             type="button"
@@ -1877,7 +1941,7 @@ function MobilePracticeSettingsSheet({
         <div className="mt-4 space-y-4">
           <div>
             <div className="mb-2 flex items-center justify-between gap-2">
-              <p className="text-sm font-semibold text-slate-200">练习模式</p>
+              <p className="text-sm font-semibold text-slate-200">练习大类</p>
               <button
                 type="button"
                 onClick={() => setIsGraphOpen(true)}
@@ -1891,7 +1955,7 @@ function MobilePracticeSettingsSheet({
                 <button
                   key={group.id}
                   type="button"
-                  onClick={() => selectPath(group.defaultModeId)}
+                  onClick={() => selectGroup(group)}
                   className={`h-10 border-r border-white/10 px-1 text-xs font-semibold transition last:border-r-0 ${
                     activeGroup.id === group.id
                       ? 'bg-guitar-accent text-white'
@@ -1957,78 +2021,6 @@ function MobilePracticeSettingsSheet({
               ))}
             </div>
           )}
-
-          <div>
-            <p className="mb-2 text-sm font-semibold text-slate-200">当前页面</p>
-            <div className="grid grid-cols-2 overflow-hidden rounded-md border border-white/15 bg-black/20">
-              <button
-                type="button"
-                onClick={() => {
-                  onStartPractice();
-                  onClose();
-                }}
-                className={`h-10 text-sm font-semibold ${subView === 'train' ? 'bg-white text-slate-950' : 'text-slate-100'}`}
-              >
-                练习
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  onShowWeakness();
-                  onClose();
-                }}
-                disabled={!activePath.weaknessAvailable}
-                className={`h-10 border-l border-white/15 text-sm font-semibold ${
-                  subView === 'weakness' && activePath.weaknessAvailable
-                    ? 'bg-guitar-accent text-white'
-                    : activePath.weaknessAvailable
-                      ? 'text-slate-100'
-                      : 'text-slate-600'
-                }`}
-              >
-                查看弱点
-              </button>
-            </div>
-          </div>
-
-          <div>
-            <p className="mb-2 text-sm font-semibold text-slate-200">调性</p>
-            <div className="grid grid-cols-2 gap-2">
-              {KEY_OPTIONS.map((key) => (
-                <button
-                  key={key}
-                  type="button"
-                onClick={() => onKeyChange(key)}
-                  className={`h-10 rounded-md border text-sm font-semibold transition ${
-                    activeKey === key
-                      ? 'border-guitar-accent bg-guitar-accent text-white'
-                      : 'border-white/15 bg-white/8 text-slate-200'
-                  }`}
-                >
-                  {key === 'G major' ? 'G 大调' : 'C 大调'}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <p className="mb-2 text-sm font-semibold text-slate-200">唱名显示</p>
-              <SolfeggioDisplayModeSelector
-                activeMode={solfeggioDisplayMode}
-                onModeChange={onSolfeggioDisplayModeChange}
-              />
-            </div>
-            <div>
-              <p className="mb-2 text-sm font-semibold text-slate-200">音色</p>
-              <GuitarToneSelector activeTone={guitarTone} onToneChange={onGuitarToneChange} />
-            </div>
-          </div>
-
-          <div className="rounded-md bg-black/20 p-3 text-xs leading-6 text-slate-500">
-            <p>正式版本：v{APP_VERSION}</p>
-            <p>构建/提交标识：{buildLabel}</p>
-          </div>
         </div>
       </section>
 
@@ -2041,6 +2033,109 @@ function MobilePracticeSettingsSheet({
         />
       )}
     </>
+  );
+}
+
+interface MobileProfileViewProps {
+  activeKey: PracticeKey;
+  solfeggioDisplayMode: SolfeggioDisplayMode;
+  guitarTone: GuitarToneId;
+  buildLabel: string;
+  onKeyChange: (key: PracticeKey) => void;
+  onSolfeggioDisplayModeChange: (mode: SolfeggioDisplayMode) => void;
+  onGuitarToneChange: (toneId: GuitarToneId) => void;
+  onExportPracticeMemory: () => void;
+  onImportPracticeMemory: () => void;
+  onClearPracticeMemory: () => void;
+}
+
+function MobileProfileView({
+  activeKey,
+  solfeggioDisplayMode,
+  guitarTone,
+  buildLabel,
+  onKeyChange,
+  onSolfeggioDisplayModeChange,
+  onGuitarToneChange,
+  onExportPracticeMemory,
+  onImportPracticeMemory,
+  onClearPracticeMemory,
+}: MobileProfileViewProps) {
+  return (
+    <section className="space-y-4">
+      <div className="rounded-lg border border-white/10 bg-white/10 p-4">
+        <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Preferences</p>
+        <h2 className="mt-2 text-xl font-bold">常用偏好</h2>
+
+        <div className="mt-4 space-y-4">
+          <div>
+            <p className="mb-2 text-sm font-semibold text-slate-200">当前调式</p>
+            <div className="grid grid-cols-2 gap-2">
+              {KEY_OPTIONS.map((key) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => onKeyChange(key)}
+                  className={`h-10 rounded-md border text-sm font-semibold transition ${
+                    activeKey === key
+                      ? 'border-guitar-accent bg-guitar-accent text-white'
+                      : 'border-white/15 bg-white/8 text-slate-200'
+                  }`}
+                >
+                  {key === 'G major' ? 'G 大调' : 'C 大调'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <p className="mb-2 text-sm font-semibold text-slate-200">唱名显示</p>
+            <SolfeggioDisplayModeSelector
+              activeMode={solfeggioDisplayMode}
+              onModeChange={onSolfeggioDisplayModeChange}
+            />
+          </div>
+
+          <div>
+            <p className="mb-2 text-sm font-semibold text-slate-200">音色</p>
+            <GuitarToneSelector activeTone={guitarTone} onToneChange={onGuitarToneChange} />
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-lg border border-white/10 bg-white/10 p-4">
+        <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Data</p>
+        <h2 className="mt-2 text-xl font-bold">练习数据</h2>
+        <div className="mt-4 grid gap-2">
+          <button
+            type="button"
+            onClick={onExportPracticeMemory}
+            className="h-10 rounded-md border border-white/15 bg-white/10 text-sm font-semibold text-slate-100 transition hover:bg-white/20"
+          >
+            导出 JSON
+          </button>
+          <button
+            type="button"
+            onClick={onImportPracticeMemory}
+            className="h-10 rounded-md border border-white/15 bg-white/10 text-sm font-semibold text-slate-100 transition hover:bg-white/20"
+          >
+            导入 JSON
+          </button>
+          <button
+            type="button"
+            onClick={onClearPracticeMemory}
+            className="h-10 rounded-md border border-rose-300/30 bg-rose-400/10 text-sm font-semibold text-rose-100 transition hover:bg-rose-400/20"
+          >
+            清空记忆
+          </button>
+        </div>
+      </div>
+
+      <div className="rounded-lg border border-white/10 bg-white/5 p-4 text-xs leading-6 text-slate-500">
+        <p>正式版本：v{APP_VERSION}</p>
+        <p>构建/提交标识：{buildLabel}</p>
+      </div>
+    </section>
   );
 }
 
