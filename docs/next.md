@@ -104,6 +104,7 @@
 
 | 日期 | 版本/标签 | 事项 | 产出位置 |
 |------|----------|------|---------|
+| 2026-05-06 | v0.0.37 | Android debug APK 环境与安卓 16 真机基础验证：安装成功、启动成功、答题/速查/我的设置/播放按钮无崩溃 | `capacitor.config.ts`、`android/`、`android/app/build/outputs/apk/debug/app-debug.apk`、`test-results/guitarlab-*.png` |
 | 2026-04-25 | 文档期 | 技术选型与架构设计 | `docs/tech/tech-stack.md`、`docs/tech/question-bank-architecture.md` |
 | 2026-04-25 | 文档期 | 乐理框架与玩法设计 | `docs/product/guitar-fretboard-game-design.md` |
 | 2026-04-25 | 文档期 | AI 交互设计方法调研 | `docs/methods/ai-interaction-design/` |
