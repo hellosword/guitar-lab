@@ -19,6 +19,16 @@ export const PRACTICE_INTERACTION_CONFIG = {
    * - 800ms 以上会更稳，但连续刷题节奏会变慢。
    */
   correctAnswerAutoAdvanceMs: 500,
+  /**
+   * 答对后等待当前音高播放结束的最长时间。
+   *
+   * 设计目的：
+   * - 正常情况下，自动下一题会等当前音高自然结束，避免声音重叠。
+   * - 但移动端浏览器/采样加载/音频上下文偶尔可能不触发 ended，
+   *   不能因此让练习流程永久卡住。
+   * - 当前吉他采样 stopAt 大约 1.45-1.5s，因此这里给 1.8s 作为兜底。
+   */
+  maxWaitForPitchPlaybackMs: 1800,
 } as const;
 
 export type PracticeInteractionConfig = typeof PRACTICE_INTERACTION_CONFIG;

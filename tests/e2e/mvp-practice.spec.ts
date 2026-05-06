@@ -45,8 +45,21 @@ function isMobileViewport(page: Page): boolean {
   return (page.viewportSize()?.width ?? 1280) < 1024;
 }
 
+async function continuePastMobileWrongDialog(page: Page): Promise<void> {
+  if (!isMobileViewport(page)) {
+    return;
+  }
+
+  const wrongDialog = page.getByRole('dialog', { name: '错题反馈' });
+  if (await wrongDialog.isVisible().catch(() => false)) {
+    await wrongDialog.getByRole('button', { name: /下一题|查看总结/ }).click();
+    await expect(wrongDialog).toHaveCount(0);
+  }
+}
+
 async function openMobileSettings(page: Page): Promise<void> {
   if (isMobileViewport(page)) {
+    await continuePastMobileWrongDialog(page);
     if (await page.getByRole('dialog', { name: '练习通路' }).isVisible().catch(() => false)) {
       return;
     }
@@ -77,6 +90,7 @@ async function selectDirection(page: Page, groupName: string, directionName: str
 
 async function openWeaknessView(page: Page): Promise<void> {
   if (isMobileViewport(page)) {
+    await continuePastMobileWrongDialog(page);
     await page.getByRole('tab', { name: '弱点' }).click();
     return;
   }
@@ -86,6 +100,7 @@ async function openWeaknessView(page: Page): Promise<void> {
 
 async function selectKey(page: Page, keyName: 'G 大调' | 'C 大调'): Promise<void> {
   if (isMobileViewport(page)) {
+    await continuePastMobileWrongDialog(page);
     await page.getByRole('button', { name: '我' }).click();
     await page.getByRole('button', { name: keyName }).click();
     await page.getByRole('button', { name: '练习' }).click();
@@ -97,6 +112,7 @@ async function selectKey(page: Page, keyName: 'G 大调' | 'C 大调'): Promise<
 
 async function selectSolfeggioDisplay(page: Page, label: 'Do Re Mi' | '1 2 3'): Promise<void> {
   if (isMobileViewport(page)) {
+    await continuePastMobileWrongDialog(page);
     await page.getByRole('button', { name: '我' }).click();
     await page.getByRole('button', { name: label }).click();
     await page.getByRole('button', { name: '练习' }).click();
@@ -120,7 +136,7 @@ test('MVP 练习页可见并能完成一道音名题', async ({ page }) => {
   }
   const hasHorizontalPageOverflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1);
   expect(hasHorizontalPageOverflow).toBe(false);
-  await expect(page.getByText('v0.0.36')).toBeVisible();
+  await expect(page.getByText('v0.0.37')).toBeVisible();
   if (isMobile) {
     await expect(page.getByText('综合练习 · G 大调 · 0-4 品', { exact: true })).toBeVisible();
   } else {
@@ -309,7 +325,7 @@ test('练习记忆会按版本写入本地并跨刷新保留', async ({ page }) 
   };
 
   expect(parsedBeforeReload.schemaVersion).toBe(1);
-  expect(parsedBeforeReload.appVersion).toBe('0.0.36');
+  expect(parsedBeforeReload.appVersion).toBe('0.0.37');
   expect(parsedBeforeReload.recentEvents?.length).toBeGreaterThan(0);
   expect(Object.keys(parsedBeforeReload.masteryMap ?? {}).length).toBeGreaterThan(0);
   expect(parsedBeforeReload.recentEvents).toEqual(
@@ -531,7 +547,7 @@ test('音名唱名总结页不会显示内部播放位置', async ({ page }) => 
   const noteSolfeggioItemKey = 'note-to-solfeggio|G major|B|Mi|';
   const memory = {
     schemaVersion: 1,
-    appVersion: '0.0.36',
+    appVersion: '0.0.37',
     createdAt: '2026-05-04T00:00:00.000Z',
     updatedAt: '2026-05-04T00:00:00.000Z',
     profile: { id: 'test-profile' },

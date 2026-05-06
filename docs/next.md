@@ -36,6 +36,9 @@
   - 为指板输入做移动端专属方案：明确横向滚动提示、当前位置吸附反馈，必要时支持横屏或放大输入模式
   - 将“播放音高 / 下一题 / 反馈状态”等练习动作与底部主导航分层，避免被固定导航遮挡
   - 将设置 Sheet 从“全量控制台”改为渐进设置：常用项优先，图选通路、版本/构建信息和低频配置折叠
+  - 练习通路小三角展开后应在顶部附近展开，而不是底部 Sheet，保持和顶部二级 tab 的空间关系
+  - 练习正文需要进一步区别于 PC Web 卡片堆叠模式，移动端主体应更紧凑、更任务流化
+  - 增加手机横屏练习适配，尤其是指板题；后续评估横屏下用左右结构展示题目/答案与完整指板
 - **预期产出**：移动端首屏交互改版方案、指板输入可用性优化、手机视口截图验收与 Playwright 回归用例
 
 ### 把位范围扩展方案
@@ -163,6 +166,9 @@
 | 2026-05-04 | v0.0.35 | 图选通路图布局优化：改为分层节点、平行双向边和底部外围弧线，减少交叉、遮挡和按钮压线 | `src/App.tsx`、`docs/product/practice-path-interaction-framework-spec.md` |
 | 2026-05-04 | 文档期 | 移动端 Adaptive Shell 交互规格：明确共享训练核心、PC Web 壳层和移动端 Focus Mode 的边界与实施阶段 | `docs/product/mobile-adaptive-shell-spec.md` |
 | 2026-05-04 | v0.0.36 | 移动端第一轮交互打磨：指板图在窄屏中保持更大的可点击宽度并在卡片内横向滚动，图选通路图改为窄屏内部横向滚动，补充页面横向溢出回归测试 | `src/components/Fretboard/index.tsx`、`src/App.tsx`、`tests/e2e/mvp-practice.spec.ts` |
-| 2026-05-04 | 待发布 | 移动端开发架构准备：抽离 `domain` 核心层、`app` 应用服务层与 `desktop` 桌面交互壳，保留现有行为不变 | `src/domain/`、`src/app/`、`src/desktop/DesktopApp.tsx`、`src/App.tsx` |
-| 2026-05-04 | 待发布 | 移动端 Focus Mode 第一版：手机端改用顶部上下文栏、设置 Sheet、底部练习/速查/弱点导航与移动端题后反馈区，桌面端保持原布局 | `src/desktop/DesktopApp.tsx`、`src/components/NoteSelector/index.tsx`、`src/components/SolfeggioSelector/index.tsx`、`tests/e2e/mvp-practice.spec.ts` |
-| 2026-05-06 | 待发布 | 移动端导航结构校准：底部改为练习/速查/我，弱点进入练习页顶部二级 tab，练习通路改为顶部折叠面板，低频偏好和数据管理移入“我” | `src/desktop/DesktopApp.tsx`、`tests/e2e/mvp-practice.spec.ts` |
+| 2026-05-04 | v0.0.37 | 移动端开发架构准备：抽离 `domain` 核心层、`app` 应用服务层与 `desktop` 桌面交互壳，保留现有行为不变 | `src/domain/`、`src/app/`、`src/desktop/DesktopApp.tsx`、`src/App.tsx` |
+| 2026-05-04 | v0.0.37 | 移动端 Focus Mode 第一版：手机端改用顶部上下文栏、设置 Sheet、底部练习/速查/弱点导航与移动端题后反馈区，桌面端保持原布局 | `src/desktop/DesktopApp.tsx`、`src/components/NoteSelector/index.tsx`、`src/components/SolfeggioSelector/index.tsx`、`tests/e2e/mvp-practice.spec.ts` |
+| 2026-05-06 | v0.0.37 | 移动端导航结构校准：底部改为练习/速查/我，弱点进入练习页顶部二级 tab，练习通路改为顶部折叠面板，低频偏好和数据管理移入“我” | `src/desktop/DesktopApp.tsx`、`tests/e2e/mvp-practice.spec.ts` |
+| 2026-05-06 | v0.0.37 | 移动端顶部通路面板与正文紧凑化：小三角改为顶部就地展开，练习正文减少 PC 卡片堆叠感并压缩题目、题面和作答区间距 | `src/desktop/DesktopApp.tsx`、`tests/e2e/mvp-practice.spec.ts` |
+| 2026-05-06 | v0.0.37 | 移动端答题反馈强化：单选按钮按判定显示正确/错误颜色，清除跨题焦点残留，并在移动端错题时弹出反馈卡 | `src/components/NoteSelector/index.tsx`、`src/components/SolfeggioSelector/index.tsx`、`src/desktop/DesktopApp.tsx`、`tests/e2e/mvp-practice.spec.ts` |
+| 2026-05-06 | v0.0.37 | 移动端总结页信息密度优化：将“再练一轮”提前到总结头部，统计改为 2 列紧凑卡片，并压缩巩固项、重点项和练习数据区 | `src/desktop/DesktopApp.tsx` |

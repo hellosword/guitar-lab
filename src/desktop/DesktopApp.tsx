@@ -57,6 +57,7 @@ import {
 } from '../domain/fretboard-game/practiceMemory';
 import type {
   AnswerRecord,
+  AnswerValue,
   MvpPracticeConfig,
   MvpQuestion,
   PracticeAnswerValue,
@@ -360,6 +361,22 @@ function formatAnswerValue(answer: PracticeAnswerValue, solfeggioDisplayMode: So
   }
 
   return isSolfeggio(answer) ? formatSolfeggio(answer, solfeggioDisplayMode) : answer;
+}
+
+function getAnsweredSingleChoice(record: AnswerRecord | null): AnswerValue | null {
+  if (record === null || Array.isArray(record.userAnswer)) {
+    return null;
+  }
+
+  return record.userAnswer;
+}
+
+function getCorrectSingleChoice(question: MvpQuestion | undefined): AnswerValue | null {
+  if (question === undefined || Array.isArray(question.answer)) {
+    return null;
+  }
+
+  return question.answer;
 }
 
 function formatQuestionSummaryTarget(question: MvpQuestion, solfeggioDisplayMode: SolfeggioDisplayMode): string {
@@ -1031,6 +1048,10 @@ function App() {
       return;
     }
 
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
+
     const responseMs = Math.round(performance.now() - questionStartedAt);
     const missedPositions = currentQuestion.answerKind === 'positions' && Array.isArray(userAnswer) && Array.isArray(currentQuestion.answer)
       ? getMissingPositions(currentQuestion.answer, userAnswer)
@@ -1099,8 +1120,15 @@ function App() {
         resolve();
       }, PRACTICE_INTERACTION_CONFIG.correctAnswerAutoAdvanceMs);
     });
+    const audioWaitLimit = new Promise<void>((resolve) => {
+      window.setTimeout(resolve, PRACTICE_INTERACTION_CONFIG.maxWaitForPitchPlaybackMs);
+    });
+    const waitForAudioOrLimit = Promise.race([
+      waitForActivePitchPlayback(),
+      audioWaitLimit,
+    ]);
 
-    Promise.all([minimumDelay, waitForActivePitchPlayback()]).then(() => {
+    Promise.all([minimumDelay, waitForAudioOrLimit]).then(() => {
       if (autoAdvanceRunRef.current !== runId) {
         return;
       }
@@ -1296,6 +1324,12 @@ function App() {
     : practiceSubView === 'weakness'
       ? '弱点地图'
       : activePath.label;
+  const answeredSingleChoice = getAnsweredSingleChoice(answeredRecord);
+  const correctSingleChoice = getCorrectSingleChoice(currentQuestion);
+  const selectedNoteAnswer = answeredSingleChoice !== null && !isSolfeggio(answeredSingleChoice) ? answeredSingleChoice : null;
+  const correctNoteAnswer = correctSingleChoice !== null && !isSolfeggio(correctSingleChoice) ? correctSingleChoice : null;
+  const selectedSolfeggioAnswer = answeredSingleChoice !== null && isSolfeggio(answeredSingleChoice) ? answeredSingleChoice : null;
+  const correctSolfeggioAnswer = correctSingleChoice !== null && isSolfeggio(correctSingleChoice) ? correctSingleChoice : null;
 
   return (
     <main className="min-h-screen bg-[#11131d] text-slate-100">
@@ -1320,13 +1354,23 @@ function App() {
             </div>
           </div>
           {activeView === 'practice' && (
-            <MobilePracticeTopTabs
-              subView={practiceSubView}
-              weaknessAvailable={activePath.weaknessAvailable}
-              onStartPractice={handleStartPractice}
-              onShowWeakness={handleShowPracticeWeakness}
-              onOpenPathPanel={() => setIsMobileSettingsOpen(true)}
-            />
+            <>
+              <MobilePracticeTopTabs
+                subView={practiceSubView}
+                weaknessAvailable={activePath.weaknessAvailable}
+                isPathPanelOpen={isMobileSettingsOpen}
+                onStartPractice={handleStartPractice}
+                onShowWeakness={handleShowPracticeWeakness}
+                onOpenPathPanel={() => setIsMobileSettingsOpen((previous) => !previous)}
+              />
+              <MobilePracticeSettingsSheet
+                isOpen={isMobileSettingsOpen}
+                activeModeId={config.modeId}
+                solfeggioDisplayMode={solfeggioDisplayMode}
+                onClose={() => setIsMobileSettingsOpen(false)}
+                onPathSelect={handlePracticePathSelect}
+              />
+            </>
           )}
         </header>
         )}
@@ -1425,7 +1469,7 @@ function App() {
             onPositionClick={handleMemoryPositionClick}
           />
         ) : (
-          <div className="min-w-0 space-y-5">
+          <div className="min-w-0 space-y-3 lg:space-y-5">
             {isDesktopLayout && (
             <div>
               <PracticePathSelector
@@ -1449,11 +1493,22 @@ function App() {
                 onPositionClick={handleWeaknessPositionClick}
               />
             ) : isFinished ? (
-              <section className="grid flex-1 place-items-center">
-                <div className="w-full max-w-2xl rounded-lg border border-white/10 bg-white/10 p-6">
-                  <p className="text-sm text-slate-400">练习完成</p>
-                  <h2 className="mt-2 text-2xl font-bold">本轮总结</h2>
-                  <div className="mt-5 grid gap-3 sm:grid-cols-2">
+              <section className="flex flex-1 justify-center lg:items-center">
+                <div className="w-full max-w-2xl rounded-md border border-white/10 bg-white/[0.06] p-4 lg:rounded-lg lg:bg-white/10 lg:p-6">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm text-slate-400">练习完成</p>
+                      <h2 className="mt-1 text-2xl font-bold">本轮总结</h2>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => restartPractice()}
+                      className="h-10 shrink-0 rounded-md bg-white px-4 text-sm font-semibold text-slate-950 transition hover:bg-slate-200"
+                    >
+                      再练一轮
+                    </button>
+                  </div>
+                  <div className="mt-4 grid grid-cols-2 gap-2 lg:mt-5 lg:gap-3">
                     <SummaryItem label="正确率" value={formatPercent(summary.accuracy)} />
                     <SummaryItem label="平均反应" value={formatMs(summary.averageResponseMs)} />
                     <SummaryItem label="慢反应题" value={`${summary.slowCount} 题`} />
@@ -1464,11 +1519,11 @@ function App() {
                   </div>
 
                   {summary.weakest.length > 0 && (
-                    <div className="mt-5 rounded-md bg-black/20 p-4">
+                    <div className="mt-4 rounded-md bg-black/20 p-3 lg:mt-5 lg:p-4">
                       <p className="text-sm font-semibold text-slate-200">最需要巩固</p>
-                      <div className="mt-3 space-y-2">
+                      <div className="mt-2 space-y-1.5 lg:mt-3 lg:space-y-2">
                         {summary.weakest.map((record) => (
-                          <p key={`${record.question.id}-${record.responseMs}`} className="text-sm text-slate-300">
+                          <p key={`${record.question.id}-${record.responseMs}`} className="text-sm leading-5 text-slate-300">
                             {formatQuestionSummaryTarget(record.question, solfeggioDisplayMode)}
                             ，{record.isCorrect ? '答对但偏慢' : '答错'}，耗时 {formatMs(record.responseMs)}
                           </p>
@@ -1478,11 +1533,11 @@ function App() {
                   )}
 
                   {memoryHighlights.length > 0 && (
-                    <div className="mt-5 rounded-md border border-guitar-accent/30 bg-guitar-accent/10 p-4">
+                    <div className="mt-4 rounded-md border border-guitar-accent/30 bg-guitar-accent/10 p-3 lg:mt-5 lg:p-4">
                       <p className="text-sm font-semibold text-slate-100">本轮重点</p>
-                      <div className="mt-3 space-y-2">
+                      <div className="mt-2 space-y-1.5 lg:mt-3 lg:space-y-2">
                         {memoryHighlights.map((highlight) => (
-                          <p key={highlight.itemKey} className="text-sm leading-6 text-slate-300">
+                          <p key={highlight.itemKey} className="text-sm leading-5 text-slate-300 lg:leading-6">
                             {highlight.label}：弱点分 {highlight.weaknessScore}
                             {highlight.responseMs === null ? '' : `，最近 ${formatMs(highlight.responseMs)}`}
                           </p>
@@ -1491,12 +1546,12 @@ function App() {
                     </div>
                   )}
 
-                  <div className="mt-5 rounded-md bg-black/20 p-4">
+                  <div className="mt-4 rounded-md bg-black/20 p-3 lg:mt-5 lg:p-4">
                     <p className="text-sm font-semibold text-slate-200">练习数据</p>
-                    <p className="mt-2 text-sm leading-6 text-slate-400">
+                    <p className="mt-1.5 text-sm leading-5 text-slate-400 lg:mt-2 lg:leading-6">
                       数据保存在本机浏览器中，也可以导出 JSON 备份或交给 Codex 分析。
                     </p>
-                    <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                    <div className="mt-3 grid grid-cols-3 gap-2">
                       <button
                         type="button"
                         onClick={handleExportPracticeMemory}
@@ -1533,35 +1588,27 @@ function App() {
                       }}
                     />
                   </div>
-
-                  <button
-                    type="button"
-                    onClick={() => restartPractice()}
-                    className="mt-6 h-11 w-full rounded-md bg-white text-sm font-semibold text-slate-950 transition hover:bg-slate-200"
-                  >
-                    再练一轮
-                  </button>
                 </div>
               </section>
             ) : (
               currentQuestion && (
                 <section className="grid min-w-0 flex-1 gap-3 lg:gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
-                  <div className="min-w-0 space-y-3 lg:space-y-5">
-                <div className="rounded-lg border border-white/10 bg-white/10 p-4">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="min-w-0 space-y-2 lg:space-y-5">
+                <div className="border-b border-white/10 px-1 pb-2 lg:rounded-lg lg:border lg:border-white/10 lg:bg-white/10 lg:p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2 lg:gap-3">
                     <div>
-                      <p className="text-xs uppercase tracking-[0.18em] text-slate-500">
+                      <p className="text-xs text-slate-500 lg:uppercase lg:tracking-[0.18em]">
                         第 {currentIndex + 1} / {questions.length} 题
                       </p>
-                      <h2 className="mt-2 text-xl font-semibold">{currentQuestion.prompt}</h2>
+                      <h2 className="mt-1 text-lg font-semibold leading-snug lg:mt-2 lg:text-xl">{currentQuestion.prompt}</h2>
                     </div>
-                    <div className="rounded-md bg-black/25 px-3 py-2 text-sm text-slate-300">
+                    <div className="rounded-md bg-black/25 px-2 py-1 text-xs text-slate-300 lg:px-3 lg:py-2 lg:text-sm">
                       {config.key === 'G major' ? 'G 大调' : 'C 大调'} · {formatRange(config)} · {getPracticeModeLabel(config.modeId)}
                     </div>
                   </div>
                 </div>
 
-                <div className="overflow-x-auto rounded-lg border border-white/10 bg-white/10 p-4">
+                <div className="overflow-x-auto px-1 py-1 lg:rounded-lg lg:border lg:border-white/10 lg:bg-white/10 lg:p-4">
                   {currentQuestion.sourceMedium === 'board' && (
                     <Fretboard
                       fretCount={config.fretRange[1]}
@@ -1573,11 +1620,11 @@ function App() {
                     <Tablature position={currentQuestion.position} />
                   )}
                   {currentQuestion.sourceMedium === 'note' && (
-                    <div className="grid min-h-[180px] place-items-center rounded-lg bg-[#171420] sm:min-h-[220px]">
+                    <div className="grid min-h-[132px] place-items-center rounded-md bg-[#171420] py-4 sm:min-h-[180px] lg:min-h-[220px] lg:rounded-lg">
                       <div className="text-center">
                         <p className="text-sm text-slate-500">音名</p>
-                        <p className="mt-3 text-7xl font-bold text-white">{currentQuestion.noteName}</p>
-                        <p className="mt-3 text-sm text-slate-400">
+                        <p className="mt-1 text-6xl font-bold text-white lg:mt-3 lg:text-7xl">{currentQuestion.noteName}</p>
+                        <p className="mt-2 text-sm text-slate-400 lg:mt-3">
                           {currentQuestion.answerKind === 'positions'
                             ? `在${formatRange(config)}内找出所有 ${currentQuestion.noteName}`
                             : `${currentQuestion.key === 'G major' ? 'G 大调' : 'C 大调'}中唱什么？`}
@@ -1586,13 +1633,13 @@ function App() {
                     </div>
                   )}
                   {currentQuestion.sourceMedium === 'solfeggio' && (
-                    <div className="grid min-h-[180px] place-items-center rounded-lg bg-[#171420] sm:min-h-[220px]">
+                    <div className="grid min-h-[132px] place-items-center rounded-md bg-[#171420] py-4 sm:min-h-[180px] lg:min-h-[220px] lg:rounded-lg">
                       <div className="text-center">
                         <p className="text-sm text-slate-500">唱名</p>
-                        <p className="mt-3 text-7xl font-bold text-white">
+                        <p className="mt-1 text-6xl font-bold text-white lg:mt-3 lg:text-7xl">
                           {formatSolfeggio(currentQuestion.solfeggio, solfeggioDisplayMode)}
                         </p>
-                        <p className="mt-3 text-sm text-slate-400">
+                        <p className="mt-2 text-sm text-slate-400 lg:mt-3">
                           {currentQuestion.answerKind === 'positions'
                             ? `在${formatRange(config)}内找出所有 ${formatSolfeggio(currentQuestion.solfeggio, solfeggioDisplayMode)}`
                             : `${currentQuestion.key === 'G major' ? 'G 大调' : 'C 大调'}中对应什么音名？`}
@@ -1603,11 +1650,11 @@ function App() {
                 </div>
 
                 {currentQuestion.answerKind === 'positions' && (
-                  <div className="overflow-x-auto rounded-lg border border-white/10 bg-white/10 p-4">
-                    <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
+                  <div className="overflow-x-auto border-t border-white/10 px-1 py-3 lg:rounded-lg lg:border lg:border-white/10 lg:bg-white/10 lg:p-4">
+                    <div className="mb-2 flex flex-wrap items-end justify-between gap-2 lg:mb-3">
                       <div>
-                        <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Answer</p>
-                        <h3 className="mt-1 text-lg font-semibold">选择所有位置</h3>
+                        <p className="hidden text-xs uppercase tracking-[0.18em] text-slate-500 lg:block">Answer</p>
+                        <h3 className="text-base font-semibold lg:mt-1 lg:text-lg">选择所有位置</h3>
                       </div>
                       <p className="text-sm text-slate-500">空指板</p>
                     </div>
@@ -1624,11 +1671,22 @@ function App() {
                 {currentQuestion.answerKind !== 'positions' && (
                   <PracticeAnswerPanel answerKind={currentQuestion.answerKind}>
                     {currentQuestion.answerKind === 'note' ? (
-                      <NoteSelector disabled={answeredRecord !== null} onSubmit={handleAnswer} />
+                      <NoteSelector
+                        key={currentQuestion.id}
+                        disabled={answeredRecord !== null}
+                        selectedNote={selectedNoteAnswer}
+                        correctNote={correctNoteAnswer}
+                        isAnswered={answeredRecord !== null}
+                        onSubmit={handleAnswer}
+                      />
                     ) : (
                       <SolfeggioSelector
+                        key={currentQuestion.id}
                         disabled={answeredRecord !== null}
                         displayMode={solfeggioDisplayMode}
+                        selectedSolfeggio={selectedSolfeggioAnswer}
+                        correctSolfeggio={correctSolfeggioAnswer}
+                        isAnswered={answeredRecord !== null}
                         onSubmit={handleAnswer}
                       />
                     )}
@@ -1636,7 +1694,7 @@ function App() {
                 )}
 
                 {!isDesktopLayout && (
-                <div className="space-y-3 rounded-lg border border-white/10 bg-[#171a27] p-4">
+                <div className="space-y-2 border-t border-white/10 px-1 py-3">
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <p className="text-sm font-semibold text-slate-200">练习详情</p>
@@ -1662,7 +1720,7 @@ function App() {
                     />
                   )}
 
-                  {answeredRecord && (
+                  {answeredRecord !== null && answeredRecord.isCorrect && (
                     <FeedbackPanel
                       record={answeredRecord}
                       solfeggioDisplayMode={solfeggioDisplayMode}
@@ -1736,13 +1794,15 @@ function App() {
             onReferenceClick={() => setActiveView('reference')}
             onProfileClick={() => setActiveView('profile')}
           />
-          <MobilePracticeSettingsSheet
-            isOpen={isMobileSettingsOpen}
-            activeModeId={config.modeId}
-            solfeggioDisplayMode={solfeggioDisplayMode}
-            onClose={() => setIsMobileSettingsOpen(false)}
-            onPathSelect={handlePracticePathSelect}
-          />
+          {answeredRecord !== null && !answeredRecord.isCorrect && (
+            <MobileWrongAnswerDialog
+              record={answeredRecord}
+              solfeggioDisplayMode={solfeggioDisplayMode}
+              isLast={currentIndex === questions.length - 1}
+              onNext={goToNextQuestion}
+              onReplay={() => playPositionPitch(answeredRecord.question.position, guitarTone)}
+            />
+          )}
         </>
       )}
       <input
@@ -1815,6 +1875,7 @@ function MobileBottomNavigation({
 interface MobilePracticeTopTabsProps {
   subView: PracticeSubView;
   weaknessAvailable: boolean;
+  isPathPanelOpen: boolean;
   onStartPractice: () => void;
   onShowWeakness: () => void;
   onOpenPathPanel: () => void;
@@ -1823,6 +1884,7 @@ interface MobilePracticeTopTabsProps {
 function MobilePracticeTopTabs({
   subView,
   weaknessAvailable,
+  isPathPanelOpen,
   onStartPractice,
   onShowWeakness,
   onOpenPathPanel,
@@ -1862,9 +1924,14 @@ function MobilePracticeTopTabs({
         type="button"
         onClick={onOpenPathPanel}
         aria-label="展开练习通路选择"
-        className="grid h-9 w-10 shrink-0 place-items-center rounded-md border border-white/15 bg-white/10 text-base font-bold text-slate-100"
+        aria-expanded={isPathPanelOpen}
+        className={`grid h-9 w-10 shrink-0 place-items-center rounded-md border text-base font-bold transition ${
+          isPathPanelOpen
+            ? 'border-guitar-accent bg-guitar-accent text-white'
+            : 'border-white/15 bg-white/10 text-slate-100'
+        }`}
       >
-        ▾
+        {isPathPanelOpen ? '▴' : '▾'}
       </button>
     </div>
   );
@@ -1915,30 +1982,27 @@ function MobilePracticeSettingsSheet({
 
   return (
     <>
-      <div className="fixed inset-0 z-50 bg-black/60 lg:hidden" onClick={onClose} aria-hidden="true" />
       <section
         role="dialog"
-        aria-modal="true"
         aria-label="练习通路"
-        className="fixed inset-x-0 bottom-0 z-50 max-h-[92vh] overflow-y-auto rounded-t-xl border border-white/10 bg-[#202331] p-3 shadow-2xl lg:hidden"
+        className="mt-3 max-h-[58vh] overflow-y-auto rounded-lg border border-white/10 bg-[#202331] p-3 shadow-xl lg:hidden"
       >
-        <div className="mx-auto mb-3 h-1 w-12 rounded-full bg-white/25" />
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Practice Path</p>
-            <h2 className="mt-1 text-xl font-bold">选择练习通路</h2>
-            <p className="mt-1 text-sm text-slate-400">{activePath.description}</p>
+            <h2 className="mt-1 text-lg font-bold">选择练习通路</h2>
+            <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-400">{activePath.description}</p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="h-9 rounded-md border border-white/15 bg-white/8 px-3 text-sm font-semibold text-slate-100"
+            className="h-8 rounded-md border border-white/15 bg-white/8 px-3 text-xs font-semibold text-slate-100"
           >
             关闭
           </button>
         </div>
 
-        <div className="mt-4 space-y-4">
+        <div className="mt-3 space-y-3">
           <div>
             <div className="mb-2 flex items-center justify-between gap-2">
               <p className="text-sm font-semibold text-slate-200">练习大类</p>
@@ -2489,15 +2553,15 @@ interface PracticeAnswerPanelProps {
 
 function PracticeAnswerPanel({ answerKind, children }: PracticeAnswerPanelProps) {
   return (
-    <div className="rounded-lg border border-white/10 bg-white/10 p-4">
-      <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
+    <div className="border-t border-white/10 px-1 py-3 lg:rounded-lg lg:border lg:border-white/10 lg:bg-white/10 lg:p-4">
+      <div className="mb-2 flex flex-wrap items-end justify-between gap-2 lg:mb-3">
         <div>
-          <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Answer</p>
-          <h3 className="mt-1 text-lg font-semibold">
+          <p className="hidden text-xs uppercase tracking-[0.18em] text-slate-500 lg:block">Answer</p>
+          <h3 className="text-base font-semibold lg:mt-1 lg:text-lg">
             {answerKind === 'note' ? '选择音名' : '选择唱名'}
           </h3>
         </div>
-        <p className="text-sm text-slate-500">
+        <p className="hidden text-sm text-slate-500 sm:block">
           一键作答，答完后查看反馈。
         </p>
       </div>
@@ -2643,6 +2707,57 @@ function FeedbackPanel({ record, solfeggioDisplayMode, isLast, onNext, onReplay 
       >
         {isLast ? '查看总结' : '下一题'}
       </button>
+    </div>
+  );
+}
+
+function MobileWrongAnswerDialog({ record, solfeggioDisplayMode, isLast, onNext, onReplay }: FeedbackPanelProps) {
+  const { question } = record;
+  const isPositionAnswer = question.answerKind === 'positions';
+  const shouldShowPosition = question.sourceMedium === 'board' || question.sourceMedium === 'tab';
+
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/65 px-4 lg:hidden" role="dialog" aria-modal="true" aria-label="错题反馈">
+      <div className="w-full max-w-sm rounded-xl border border-rose-300/40 bg-[#211d2b] p-4 shadow-2xl">
+        <p className="text-xs uppercase tracking-[0.18em] text-rose-200/70">Feedback</p>
+        <h2 className="mt-2 text-2xl font-bold text-rose-100">再记一次</h2>
+        <div className="mt-3 space-y-2 rounded-md bg-black/20 p-3 text-sm leading-6 text-slate-100">
+          <p>你的答案：{formatAnswerValue(record.userAnswer, solfeggioDisplayMode)}</p>
+          <p>正确答案：{formatAnswerValue(question.answer, solfeggioDisplayMode)}</p>
+          {!isPositionAnswer && shouldShowPosition && <p>位置：{formatPosition(question.position)}</p>}
+          <p>音名：{question.noteName}</p>
+          <p>{question.key === 'G major' ? 'G 大调' : 'C 大调'}唱名：{formatSolfeggio(question.solfeggio, solfeggioDisplayMode)}</p>
+          {isPositionAnswer && (
+            <>
+              {record.missedPositions.length > 0 && <p>漏点：{formatPositions(record.missedPositions)}</p>}
+              {record.extraPositions.length > 0 && <p>误点：{formatPositions(record.extraPositions)}</p>}
+            </>
+          )}
+          <p>反应链：{formatQuestionSummaryTarget(question, solfeggioDisplayMode)}</p>
+        </div>
+
+        <div className="mt-4 grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            title={`重播音高：${formatPosition(question.position)}`}
+            onClick={() => {
+              onReplay().catch(() => {
+                // 音频失败不阻塞继续练习。
+              });
+            }}
+            className="h-10 rounded-md border border-white/15 bg-white/8 text-sm font-semibold text-slate-100"
+          >
+            重播音高
+          </button>
+          <button
+            type="button"
+            onClick={onNext}
+            className="h-10 rounded-md bg-white text-sm font-semibold text-slate-950"
+          >
+            {isLast ? '查看总结' : '下一题'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -3313,9 +3428,9 @@ interface StatProps {
 
 function SummaryItem({ label, value }: StatProps) {
   return (
-    <div className="rounded-md bg-black/20 p-4">
-      <p className="text-sm text-slate-400">{label}</p>
-      <p className="mt-1 text-2xl font-bold">{value}</p>
+    <div className="rounded-md bg-black/20 p-3 lg:p-4">
+      <p className="text-xs text-slate-400 lg:text-sm">{label}</p>
+      <p className="mt-1 text-xl font-bold lg:text-2xl">{value}</p>
     </div>
   );
 }
