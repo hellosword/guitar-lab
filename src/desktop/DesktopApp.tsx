@@ -2828,11 +2828,11 @@ function FretboardMemoryView({
   }
 
   return (
-    <section className="grid min-w-0 flex-1 gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
-      <div className="min-w-0 space-y-5">
-        <div className="rounded-lg border border-white/10 bg-white/10 p-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
+    <section className="grid min-w-0 flex-1 gap-3 lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-5">
+      <div className="min-w-0 space-y-3 lg:space-y-5">
+        <div className="border-b border-white/10 pb-3 sm:rounded-lg sm:border sm:bg-white/10 sm:p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div className="hidden sm:block">
               <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Fretboard Reference</p>
               <h2 className="mt-2 text-xl font-semibold">随时打开的指板速查</h2>
               <p className="mt-2 text-sm leading-6 text-slate-400">
@@ -2840,14 +2840,14 @@ function FretboardMemoryView({
               </p>
             </div>
 
-            <div className="flex gap-2">
+            <div className="grid flex-1 grid-cols-2 rounded-md border border-white/15 bg-black/20 p-0.5 sm:flex sm:flex-none sm:border-0 sm:bg-transparent sm:p-0">
               <button
                 type="button"
                 onClick={() => onMarkerModeChange('note')}
-                className={`h-10 rounded-md border px-4 text-sm font-semibold transition ${
+                className={`h-9 rounded-[5px] border px-3 text-sm font-semibold transition sm:h-10 sm:px-4 ${
                   markerMode === 'note'
                     ? 'border-guitar-accent bg-guitar-accent text-white'
-                    : 'border-white/15 bg-white/10 text-slate-200 hover:bg-white/20'
+                    : 'border-transparent text-slate-200 hover:bg-white/10 sm:border-white/15 sm:bg-white/10 sm:hover:bg-white/20'
                 }`}
               >
                 音名标记
@@ -2855,10 +2855,10 @@ function FretboardMemoryView({
               <button
                 type="button"
                 onClick={() => onMarkerModeChange('solfeggio')}
-                className={`h-10 rounded-md border px-4 text-sm font-semibold transition ${
+                className={`h-9 rounded-[5px] border px-3 text-sm font-semibold transition sm:h-10 sm:px-4 ${
                   markerMode === 'solfeggio'
                     ? 'border-guitar-accent bg-guitar-accent text-white'
-                    : 'border-white/15 bg-white/10 text-slate-200 hover:bg-white/20'
+                    : 'border-transparent text-slate-200 hover:bg-white/10 sm:border-white/15 sm:bg-white/10 sm:hover:bg-white/20'
                 }`}
               >
                 唱名标记
@@ -2867,7 +2867,7 @@ function FretboardMemoryView({
           </div>
 
           {markerMode === 'note' && (
-            <label className="mt-4 flex w-fit items-center gap-3 rounded-md border border-white/10 bg-black/20 px-3 py-2 text-sm text-slate-200">
+            <label className="mt-2 flex w-fit items-center gap-2 text-xs text-slate-300 sm:mt-4 sm:gap-3 sm:rounded-md sm:border sm:border-white/10 sm:bg-black/20 sm:px-3 sm:py-2 sm:text-sm sm:text-slate-200">
               <input
                 type="checkbox"
                 checked={showOutOfKeyNotes}
@@ -2879,9 +2879,9 @@ function FretboardMemoryView({
           )}
         </div>
 
-        <div className="overflow-x-auto rounded-lg border border-white/10 bg-white/10 p-4">
+        <div className="-mx-3 overflow-x-auto border-y border-white/10 bg-white/[0.04] px-3 py-2 sm:mx-0 sm:rounded-lg sm:border sm:bg-white/10 sm:p-4">
           <Fretboard
-            fretCount={5}
+            fretCount={15}
             selectedPositions={selectedPosition === null ? [] : [selectedPosition]}
             getPositionLabel={getPositionLabel}
             onPositionClick={onPositionClick}
@@ -2889,8 +2889,8 @@ function FretboardMemoryView({
         </div>
       </div>
 
-      <aside className="flex flex-col gap-4 rounded-lg border border-white/10 bg-[#171a27] p-4">
-        <div>
+      <aside className="flex flex-col gap-3 border-t border-white/10 pt-3 lg:gap-4 lg:rounded-lg lg:border lg:bg-[#171a27] lg:p-4">
+        <div className="hidden sm:block">
           <p className="text-sm font-semibold text-slate-200">
             {practiceKey === 'G major' ? 'G 大调' : 'C 大调'}音名 / 唱名映射
           </p>
@@ -2899,8 +2899,8 @@ function FretboardMemoryView({
           </p>
         </div>
 
-        <div className="space-y-2 rounded-lg bg-black/20 p-3">
-          <div className="grid grid-cols-[48px_repeat(7,minmax(0,1fr))] gap-2">
+        <div className="space-y-1.5 bg-black/10 sm:rounded-lg sm:bg-black/20 sm:p-3">
+          <div className="grid grid-cols-[32px_repeat(7,minmax(0,1fr))] gap-1.5 sm:grid-cols-[48px_repeat(7,minmax(0,1fr))] sm:gap-2">
             <div className="grid place-items-center text-xs text-slate-500">音名</div>
             {mapping.map((item) => (
               <MappingCell
@@ -2913,7 +2913,7 @@ function FretboardMemoryView({
               />
             ))}
           </div>
-          <div className="grid grid-cols-[48px_repeat(7,minmax(0,1fr))] gap-2">
+          <div className="grid grid-cols-[32px_repeat(7,minmax(0,1fr))] gap-1.5 sm:grid-cols-[48px_repeat(7,minmax(0,1fr))] sm:gap-2">
             <div className="grid place-items-center text-xs text-slate-500">唱名</div>
             {mapping.map((item) => (
               <MappingCell
@@ -2928,12 +2928,12 @@ function FretboardMemoryView({
           </div>
         </div>
 
-        <div className="rounded-lg border border-white/10 bg-white/8 p-4">
-          <p className="text-sm font-semibold text-slate-200">当前点击</p>
+        <div className="border-t border-white/10 pt-3 sm:rounded-lg sm:border sm:bg-white/8 sm:p-4">
+          <p className="text-xs font-semibold text-slate-400 sm:text-sm sm:text-slate-200">当前点击</p>
           {selectedPosition === null || selectedNote === null ? (
-            <p className="mt-2 text-sm text-slate-500">点击指板上的任意位置。</p>
+            <p className="mt-1 text-sm text-slate-500 sm:mt-2">点击指板上的任意位置。</p>
           ) : (
-            <div className="mt-3 space-y-2 text-sm text-slate-200">
+            <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-sm text-slate-200 sm:mt-3 sm:block sm:space-y-2">
               <p>位置：{formatPosition(selectedPosition)}</p>
               <p>音名：{selectedNote}</p>
               <p>
@@ -2944,7 +2944,7 @@ function FretboardMemoryView({
           )}
         </div>
 
-        <div className="rounded-lg border border-white/10 bg-white/8 p-4 text-sm leading-6 text-slate-400">
+        <div className="hidden rounded-lg border border-white/10 bg-white/8 p-4 text-sm leading-6 text-slate-400 sm:block">
           <p className="font-semibold text-slate-200">使用建议</p>
           <p className="mt-2">
             先用音名标记确认位置，再切到唱名标记。特别留意 G 大调里 D = {formatSolfeggio('Sol', solfeggioDisplayMode)}，F# = {formatSolfeggio('Si', solfeggioDisplayMode)}。
@@ -3409,7 +3409,7 @@ function MappingCell({ value, active, color, onHoverStart, onHoverEnd }: Mapping
       tabIndex={0}
       role="button"
       aria-label={`聚焦 ${value}`}
-      className="grid h-10 place-items-center rounded-md border text-sm font-bold transition"
+      className="grid h-8 place-items-center rounded-md border text-xs font-bold transition sm:h-10 sm:text-sm"
       style={{
         backgroundColor: active ? color.fill : color.softFill,
         borderColor: active ? '#ffffff' : color.stroke,

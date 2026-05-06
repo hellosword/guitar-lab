@@ -69,6 +69,7 @@ export default function Fretboard({
   const boardHeight = height - top - bottom;
   const fretSpacing = boardWidth / (fretCount + 1);
   const stringSpacing = boardHeight / (STRINGS.length - 1);
+  const svgMinWidth = fretCount > 8 ? 1120 : 520;
 
   function getStringY(string: number): number {
     return top + (string - 1) * stringSpacing;
@@ -120,7 +121,8 @@ export default function Fretboard({
         >
           <svg
             viewBox={`0 0 ${width} ${height}`}
-            className={`block w-full min-w-[520px] sm:min-w-0 ${onPositionClick !== undefined ? 'cursor-pointer touch-manipulation' : ''}`}
+            className={`block w-full ${onPositionClick !== undefined ? 'cursor-pointer touch-manipulation' : ''}`}
+            style={{ minWidth: svgMinWidth }}
             role="img"
             aria-label="吉他指板"
             onClick={handleSvgClick}

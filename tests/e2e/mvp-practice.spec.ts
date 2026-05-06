@@ -136,7 +136,7 @@ test('MVP 练习页可见并能完成一道音名题', async ({ page }) => {
   }
   const hasHorizontalPageOverflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1);
   expect(hasHorizontalPageOverflow).toBe(false);
-  await expect(page.getByText('v0.0.37')).toBeVisible();
+  await expect(page.getByText('v0.0.38')).toBeVisible();
   if (isMobile) {
     await expect(page.getByText('综合练习 · G 大调 · 0-4 品', { exact: true })).toBeVisible();
   } else {
@@ -325,7 +325,7 @@ test('练习记忆会按版本写入本地并跨刷新保留', async ({ page }) 
   };
 
   expect(parsedBeforeReload.schemaVersion).toBe(1);
-  expect(parsedBeforeReload.appVersion).toBe('0.0.37');
+  expect(parsedBeforeReload.appVersion).toBe('0.0.38');
   expect(parsedBeforeReload.recentEvents?.length).toBeGreaterThan(0);
   expect(Object.keys(parsedBeforeReload.masteryMap ?? {}).length).toBeGreaterThan(0);
   expect(parsedBeforeReload.recentEvents).toEqual(
@@ -547,7 +547,7 @@ test('音名唱名总结页不会显示内部播放位置', async ({ page }) => 
   const noteSolfeggioItemKey = 'note-to-solfeggio|G major|B|Mi|';
   const memory = {
     schemaVersion: 1,
-    appVersion: '0.0.37',
+    appVersion: '0.0.38',
     createdAt: '2026-05-04T00:00:00.000Z',
     updatedAt: '2026-05-04T00:00:00.000Z',
     profile: { id: 'test-profile' },
@@ -1176,11 +1176,11 @@ test('指板记忆页可以切换标记并点击位置查看映射', async ({ pa
 
   await page.getByRole('button', { name: '速查' }).click();
 
-  await expect(page.getByRole('heading', { name: '随时打开的指板速查' })).toBeVisible();
-  await expect(page.getByText('G 大调音名 / 唱名映射')).toBeVisible();
+  await expect(page.getByRole('button', { name: '音名标记' })).toBeVisible();
   await expect(page.getByText('音名', { exact: true })).toBeVisible();
   await expect(page.getByText('唱名', { exact: true })).toBeVisible();
   await expect(page.getByLabel('显示非当前大调内音')).not.toBeChecked();
+  await expect(page.getByRole('button', { name: '播放 1 弦 15 品' })).toBeVisible();
 
   await page.getByRole('button', { name: '播放 3 弦 2 品' }).click();
   await expect(page.getByText('位置：3 弦 2 品')).toBeVisible();
@@ -1195,9 +1195,10 @@ test('指板记忆页可以切换标记并点击位置查看映射', async ({ pa
   }
   await expect(page.getByText(/^位置：/)).toBeVisible();
 
-  await expect(page.getByText('G#')).toHaveCount(0);
+  const outOfKeyGSharpLabel = page.locator('g[aria-label="播放 1 弦 4 品"] text');
+  await expect(outOfKeyGSharpLabel).toHaveCount(0);
   await page.getByLabel('显示非当前大调内音').check();
-  await expect(page.getByText('G#').first()).toBeVisible();
+  await expect(outOfKeyGSharpLabel).toHaveText('G#');
 
   await page.getByRole('button', { name: '聚焦 D' }).first().hover();
   await expect(page.locator('g[aria-label="播放 3 弦 2 品"] text')).toHaveAttribute('fill', '#94a3b8');
